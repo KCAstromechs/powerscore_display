@@ -66,6 +66,7 @@ import requests
 import sys
 import os.path
 from bs4 import BeautifulSoup
+import re
 
 '''
 IMPORTANT NOTE
@@ -177,6 +178,10 @@ class ExternalScoring:
         elif "theorangealliance.org/apiv2" in requestURI:
             # Specific logic for theorangealliance
             event, teams, matches = self.getEventTeamsMatches_toa()
+
+        elif "worlds.pennfirst.org/cache/TeamInfo" in requestURI:
+            # Specific logic for worlds ... works for 2018 at least
+            event, teams, matches = self.getEventTeamsMatches_pennfirst()
 
         else:
             # Default logic - ftc scoring system
@@ -368,23 +373,40 @@ class ExternalScoring:
 
     # Get the data the default way ... e.g. from the socring software
     def getEventTeamsMatches_default(self):
-
         requestURI = self.getCurrentDivisionURI()
+        return self.getEventTeamsMatches_ScoringURLs(requestURI+"/TeamList", requestURI+"/Rankings", requestURI+"/MatchDetails")
+
+    # Special case for worlds, or an event that follows the worlds/pennfirst pattern
+    def getEventTeamsMatches_pennfirst(self):
+        # The expectation here is that the url is pointing at the TeamInfo page
+        #http://houston.worlds.pennfirst.org/cache/TeamInfo_2018_World_Championship_Franklin.html?_=1524026469419
+        requestURI = self.getCurrentDivisionURI()
+        p = re.compile('(http://.*/cache/)TeamInfo(.*\.html).*')
+        m = p.match(requestURI)
+
+        teamListURL = m.group(1)+'TeamInfo'+m.group(2)
+        rankingsURL = m.group(1)+'Rankings'+m.group(2)
+        matchDetailsURL = m.group(1)+'MatchResultsDetails'+m.group(2)   # why was this renamed from MatchDetails on pennfirst???
+
+        return self.getEventTeamsMatches_ScoringURLs(teamListURL,rankingsURL,matchDetailsURL)
+
+    # commoon method to handle the ftc scoring system urls ... helps becuase of events that do goofy things with URLs
+    def getEventTeamsMatches_ScoringURLs(self,teamListURL, rankingsURL, matchDetailsURL):
 
         event = {}
         teams = {}
         matches = {}
 
         # Not one of the specific known use cases ... so try as though it's the scoring software
-        r=requests.get(requestURI+"/TeamList", timeout=3)
+        r=requests.get(teamListURL, timeout=3)
         teamListHTML = r.text
         teamList = BeautifulSoup(teamListHTML, "html.parser")
 
-        r=requests.get(requestURI+"/Rankings", timeout=3)
+        r=requests.get(rankingsURL, timeout=3)
         rankingsHTML = r.text
         rankings = BeautifulSoup(rankingsHTML,"html.parser")
 
-        r=requests.get(requestURI+"/MatchDetails", timeout=3)
+        r=requests.get(matchDetailsURL, timeout=3)
         matchDetailsHTML = r.text
         matchDetails = BeautifulSoup(matchDetailsHTML,"html.parser")
 
