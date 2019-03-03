@@ -105,3 +105,5 @@ ENV/
 .idea/powerscore_display.iml
 .idea/vcs.xml
 .idea/workspace.xml
+.idea/inspectionProfiles/Project_Default.xml
+*.py___jb_tmp___
