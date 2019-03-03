@@ -99,3 +99,9 @@ ENV/
 
 # mypy
 .mypy_cache/
+.idea/encodings.xml
+.idea/misc.xml
+.idea/modules.xml
+.idea/powerscore_display.iml
+.idea/vcs.xml
+.idea/workspace.xml
