@@ -1,5 +1,7 @@
 #! /usr/bin/env python
 
+
+
 import requests
 from bs4 import BeautifulSoup
 import re
@@ -43,6 +45,8 @@ matches =   {   1:
 #
 # event, teams, and matches dictionary objects are constructed from remote data in these methods
 #
+
+
 class ExternalScoring:
     # Constructor
     def __init__(self,division1URI,division2URI,apiKey):
@@ -285,7 +289,7 @@ class ExternalScoring:
                 matches[match["match_key"]]['alliances']['blue']['pen'] = match["red_penalty"]
 
         # Now, going through the "stations" to pick up the teams for the match.
-        # Would have been nice it could have been included in the matches reponse...  oh well
+        # Would have been nice it could have been included in the matches response...  oh well
 
         for match in matchesJsonResult:
             if match['match_key'] in matches:
