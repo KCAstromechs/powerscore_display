@@ -320,8 +320,8 @@ class ExternalScoring:
         for ranking in rankingsJsonResult:
             teamNum = int(ranking["team_key"])
             teams[teamNum]['rank'] = ranking["rank"]
-            teams[teamNum]['qp'] = ranking["qualifying_points"]
-            teams[teamNum]['rp'] = ranking["ranking_points"]
+            teams[teamNum]['qp'] = ranking["ranking_points"]
+            teams[teamNum]['rp'] = ranking["tie_breaker_points"]
             teams[teamNum]['highest'] = ranking["highest_qual_score"]
             teams[teamNum]['matches'] = ranking["played"]
             teams[teamNum]['real_matches'] = 0
@@ -345,7 +345,6 @@ class ExternalScoring:
                 matches[match["match_key"]]['alliances']['red']['teleop'] = match["red_tele_score"]
                 matches[match["match_key"]]['alliances']['red']['endg'] = match["red_end_score"]
                 matches[match["match_key"]]['alliances']['red']['pen'] = match["blue_penalty"]
-
 
                 matches[match["match_key"]]['alliances']['blue'] = {}
                 matches[match["match_key"]]['alliances']['blue']['total'] = match["blue_score"]
@@ -529,10 +528,8 @@ class ExternalScoring:
         # Now do the allianceScores total
         for matchid in matches:
             match = matches[matchid]
-
             adjBlueScore = match["alliances"]["blue"]["total"]-match["alliances"]["blue"]["pen"]
             adjRedScore = match["alliances"]["red"]["total"]-match["alliances"]["red"]["pen"]
-
             # The math here takes care of the 50-50 split - each team in an alliance get credit for 50% of the scoring (we'll fix that later)
             # There's also a division by the number of matches for each team ... this has the effect of normalizing to the number of matches played
             teams[match["alliances"]["blue"]["team1"]]['allianceScore'] += adjBlueScore/(2.*teams[match["alliances"]["blue"]["team1"]]['real_matches'])
@@ -555,7 +552,6 @@ class ExternalScoring:
             if (teams[match["alliances"]["red"]["team1"]]['allianceScore'] + teams[match["alliances"]["red"]["team2"]]['allianceScore']) >0:
                 teams[match["alliances"]["red"]["team1"]]['powerScore'] += adjRedScore * teams[match["alliances"]["red"]["team1"]]['allianceScore']/ ((teams[match["alliances"]["red"]["team1"]]['allianceScore'] + teams[match["alliances"]["red"]["team2"]]['allianceScore'])* teams[match["alliances"]["red"]["team1"]]['real_matches'])
                 teams[match["alliances"]["red"]["team2"]]['powerScore'] += adjRedScore * teams[match["alliances"]["red"]["team2"]]['allianceScore']/ ((teams[match["alliances"]["red"]["team1"]]['allianceScore'] + teams[match["alliances"]["red"]["team2"]]['allianceScore'])* teams[match["alliances"]["red"]["team2"]]['real_matches'])
-
 #
 # PowerScoreScreen
 #
@@ -917,7 +913,8 @@ def main():
     #   and we'll give the user an error.
     #try:
     event, teams, matches = externalScoring.getEventTeamsMatches()
-
+    #print(teams)
+    #print(matches)
     #except:
     #    print("ERROR: Initial contact of the scoring system failed.")
     #    print()
