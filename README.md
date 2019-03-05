@@ -10,9 +10,12 @@ Contact us: http://www.kcastromechs.org or on twitter at @KCAstromechs
 ## Usage
 ... A few sample command line usages is coming Soon ...
 
-## installation
-... Information on how to install the required libraries is coming soon ...
+## Installation
+*Python 3 is highly recommended over Python 2*
 
+Required packages: `requests`, `beautifulsoup4`
+ * `pip install requests`
+ * `pip install beautifulsoup4`
 
 **************************************************************************************
 # Release Information
