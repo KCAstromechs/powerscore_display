@@ -100,7 +100,6 @@ matches =   {   1:
 
 '''
 
-
 #
 # ExternalScoring
 #
@@ -108,6 +107,8 @@ matches =   {   1:
 #
 # event, teams, and matches dictionary objects are constructed from remote data in these methods
 #
+
+
 class ExternalScoring:
     # Constructor
     def __init__(self,division1URI,division2URI,apiKey):
@@ -137,8 +138,8 @@ class ExternalScoring:
         #    https://theorangealliance.org/events/1718-MO-CAPS is an example ftcscores URL
         #    https://theorangealliance.org/apiv2/event/1718-MO-CAPS is the corresponding event api URL
         # Note: no effect if the api url was used, or if the url is not for ftcscores.com
-        self.division1URI = self.division1URI.replace("https://theorangealliance.org/events/", "https://theorangealliance.org/apiv2/event/")
-        self.division2URI = self.division2URI.replace("https://theorangealliance.org/events/", "https://theorangealliance.org/apiv2/event/")
+        self.division1URI = self.division1URI.replace("https://theorangealliance.org/events/", "https://theorangealliance.org/api/event/")
+        self.division2URI = self.division2URI.replace("https://theorangealliance.org/events/", "https://theorangealliance.org/api/event/")
 
         if (self.division2URI == ""):
             self.numDivisions=1
@@ -175,7 +176,7 @@ class ExternalScoring:
             # Specific logic for ftcscores.com
             event, teams, matches = self.getEventTeamsMatches_ftcscores()
 
-        elif "theorangealliance.org/apiv2" in requestURI:
+        elif "theorangealliance.org/api" in requestURI:
             # Specific logic for theorangealliance
             event, teams, matches = self.getEventTeamsMatches_toa()
 
@@ -279,19 +280,19 @@ class ExternalScoring:
         matches = {}
 
         # why, oh why, does toa make getting the event details so hard.  5 requests are necessary to get the data we need :(
-        r=requests.get(requestURI, headers={'X-Application-Origin': 'PowerScore', 'X-TOA-Key': self.apiKey},  timeout=5)
+        r=requests.get(requestURI, headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'X-TOA-Key': self.apiKey},  timeout=5)
         eventJsonResult = r.json()
 
-        r=requests.get(requestURI+"/matches", headers={'X-Application-Origin': 'PowerScore', 'X-TOA-Key': self.apiKey},  timeout=5)
+        r=requests.get(requestURI+"/matches", headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'X-TOA-Key': self.apiKey},  timeout=5)
         matchesJsonResult = r.json()
-
-        r=requests.get(requestURI+"/matches/stations", headers={'X-Application-Origin': 'PowerScore', 'X-TOA-Key': self.apiKey},  timeout=5)
+        '''
+        r=requests.get(requestURI+"/matches/stations", headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'X-TOA-Key': self.apiKey},  timeout=5)
         stationsJsonResult = r.json()
-
-        r=requests.get(requestURI+"/teams", headers={'X-Application-Origin': 'PowerScore', 'X-TOA-Key': self.apiKey},  timeout=5)
+        '''
+        r=requests.get(requestURI+"/teams", headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'X-TOA-Key': self.apiKey},  timeout=5)
         teamsJsonResult = r.json()
 
-        r=requests.get(requestURI+"/rankings", headers={'X-Application-Origin': 'PowerScore', 'X-TOA-Key': self.apiKey},  timeout=5)
+        r=requests.get(requestURI+"/rankings", headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'X-TOA-Key': self.apiKey},  timeout=5)
         rankingsJsonResult = r.json()
 
 
@@ -306,18 +307,21 @@ class ExternalScoring:
             teamNum = int(team["team_key"])
             teams[teamNum] = {}
             teams[teamNum]['number'] = teamNum
-            teams[teamNum]['name'] = team["team_name_short"]
+            teams[teamNum]['name'] = team["team"]["team_name_short"]
             teams[teamNum]['school'] = ''
-            teams[teamNum]['city'] = team["city"]
-            teams[teamNum]['state'] = team["state_prov"]
-            teams[teamNum]['country'] = team["country"]
+            teams[teamNum]['city'] = team["team"]["city"]
+            teams[teamNum]['state'] = team["team"]["state_prov"]
+            teams[teamNum]['country'] = team["team"]["country"]
+
+            if teams[teamNum]['name'] == None:
+                teams[teamNum]['name'] = ""
 
         # Add in the ranking information
         for ranking in rankingsJsonResult:
             teamNum = int(ranking["team_key"])
             teams[teamNum]['rank'] = ranking["rank"]
-            teams[teamNum]['qp'] = ranking["qualifying_points"]
-            teams[teamNum]['rp'] = ranking["ranking_points"]
+            teams[teamNum]['qp'] = ranking["ranking_points"]
+            teams[teamNum]['rp'] = ranking["tie_breaker_points"]
             teams[teamNum]['highest'] = ranking["highest_qual_score"]
             teams[teamNum]['matches'] = ranking["played"]
             teams[teamNum]['real_matches'] = 0
@@ -342,7 +346,6 @@ class ExternalScoring:
                 matches[match["match_key"]]['alliances']['red']['endg'] = match["red_end_score"]
                 matches[match["match_key"]]['alliances']['red']['pen'] = match["blue_penalty"]
 
-
                 matches[match["match_key"]]['alliances']['blue'] = {}
                 matches[match["match_key"]]['alliances']['blue']['total'] = match["blue_score"]
                 matches[match["match_key"]]['alliances']['blue']['auto'] = match["blue_auto_score"]
@@ -351,7 +354,28 @@ class ExternalScoring:
                 matches[match["match_key"]]['alliances']['blue']['pen'] = match["red_penalty"]
 
         # Now, going through the "stations" to pick up the teams for the match.
-        # Would have been nice it could have been included in the matches reponse...  oh well
+        # Would have been nice it could have been included in the matches response...  oh well
+
+        for match in matchesJsonResult:
+            if match['match_key'] in matches:
+                #print(match['participants'][0]['team']['team_number'])  # Red 1
+                #print(match['participants'][1])  # Red 2
+                #print(match['participants'][2])  # Blue 1
+                #print(match['participants'][3])  # Blue 2
+                #print(match)
+                matches[match['match_key']]['alliances']['red']['team1'] = match['participants'][0]['team']['team_number']
+                matches[match['match_key']]['alliances']['red']['team2'] = match['participants'][1]['team']['team_number']
+                teams[match['participants'][0]['team']['team_number']]['real_matches'] += 1
+                teams[match['participants'][1]['team']['team_number']]['real_matches'] += 1
+
+                matches[match['match_key']]['alliances']['blue']['team1'] = match['participants'][2]['team']['team_number']
+                matches[match['match_key']]['alliances']['blue']['team2'] = match['participants'][3]['team']['team_number']
+                teams[match['participants'][2]['team']['team_number']]['real_matches'] += 1
+                teams[match['participants'][3]['team']['team_number']]['real_matches'] += 1
+
+            #print(match['participants'])
+
+        '''
         for station in stationsJsonResult:
             if (station["match_key"] in matches):
 
@@ -368,7 +392,7 @@ class ExternalScoring:
                 #also... udpate the "real matches"... to account for surrogates in powerscore
                 teams[int(station["teams"].split(",")[2])]['real_matches']+=1
                 teams[int(station["teams"].split(",")[3])]['real_matches']+=1
-
+        '''
         return (event, teams, matches)
 
     # Get the data the default way ... e.g. from the socring software
@@ -504,10 +528,8 @@ class ExternalScoring:
         # Now do the allianceScores total
         for matchid in matches:
             match = matches[matchid]
-
             adjBlueScore = match["alliances"]["blue"]["total"]-match["alliances"]["blue"]["pen"]
             adjRedScore = match["alliances"]["red"]["total"]-match["alliances"]["red"]["pen"]
-
             # The math here takes care of the 50-50 split - each team in an alliance get credit for 50% of the scoring (we'll fix that later)
             # There's also a division by the number of matches for each team ... this has the effect of normalizing to the number of matches played
             teams[match["alliances"]["blue"]["team1"]]['allianceScore'] += adjBlueScore/(2.*teams[match["alliances"]["blue"]["team1"]]['real_matches'])
@@ -530,7 +552,6 @@ class ExternalScoring:
             if (teams[match["alliances"]["red"]["team1"]]['allianceScore'] + teams[match["alliances"]["red"]["team2"]]['allianceScore']) >0:
                 teams[match["alliances"]["red"]["team1"]]['powerScore'] += adjRedScore * teams[match["alliances"]["red"]["team1"]]['allianceScore']/ ((teams[match["alliances"]["red"]["team1"]]['allianceScore'] + teams[match["alliances"]["red"]["team2"]]['allianceScore'])* teams[match["alliances"]["red"]["team1"]]['real_matches'])
                 teams[match["alliances"]["red"]["team2"]]['powerScore'] += adjRedScore * teams[match["alliances"]["red"]["team2"]]['allianceScore']/ ((teams[match["alliances"]["red"]["team1"]]['allianceScore'] + teams[match["alliances"]["red"]["team2"]]['allianceScore'])* teams[match["alliances"]["red"]["team2"]]['real_matches'])
-
 #
 # PowerScoreScreen
 #
@@ -886,13 +907,14 @@ def main():
 
     args = parser.parse_args()
 
-    externalScoring = ExternalScoring(args.url1,args.url2,args.key)
+    externalScoring = ExternalScoring(args.url1, args.url2, args.key)
 
     #   Check to see if we can get data from the external system.  Any failure on this initial connection
     #   and we'll give the user an error.
     #try:
     event, teams, matches = externalScoring.getEventTeamsMatches()
-
+    #print(teams)
+    #print(matches)
     #except:
     #    print("ERROR: Initial contact of the scoring system failed.")
     #    print()
