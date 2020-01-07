@@ -215,7 +215,7 @@ class ExternalScoring:
         # Assemble all the team info from the teams and rankings sections
         if "teams" in jsonResult:
             for team in jsonResult["teams"]:
-                teamNum = jsonResult["teams"][team]["number"]
+                teamNum = int(team)  # gonna force to an integer... makes it easier later
                 teams[teamNum] = {}
                 teams[teamNum]['number'] = teamNum
                 teams[teamNum]['name'] = jsonResult["teams"][team]["name"]
@@ -223,6 +223,7 @@ class ExternalScoring:
                 teams[teamNum]['city'] = jsonResult["teams"][team]["city"]
                 teams[teamNum]['state'] = jsonResult["teams"][team]["state"]
                 teams[teamNum]['country'] = jsonResult["teams"][team]["country"]
+
         if "rankings" in jsonResult:
             for ranking in jsonResult["rankings"]:
                 teamNum = ranking["number"]
@@ -285,16 +286,12 @@ class ExternalScoring:
 
         r=requests.get(requestURI+"/matches", headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'X-TOA-Key': self.apiKey},  timeout=5)
         matchesJsonResult = r.json()
-        '''
-        r=requests.get(requestURI+"/matches/stations", headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'X-TOA-Key': self.apiKey},  timeout=5)
-        stationsJsonResult = r.json()
-        '''
+
         r=requests.get(requestURI+"/teams", headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'X-TOA-Key': self.apiKey},  timeout=5)
         teamsJsonResult = r.json()
 
         r=requests.get(requestURI+"/rankings", headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'X-TOA-Key': self.apiKey},  timeout=5)
         rankingsJsonResult = r.json()
-
 
         # Just a couple of event things
         event['title'] = eventJsonResult[0]['event_name']
@@ -303,7 +300,9 @@ class ExternalScoring:
             event['subtitle'] = eventJsonResult[0]['division_name']
 
         # Assemble all the team info from the teams request
+        rank=0
         for team in teamsJsonResult:
+            rank+=1
             teamNum = int(team["team_key"])
             teams[teamNum] = {}
             teams[teamNum]['number'] = teamNum
@@ -312,6 +311,14 @@ class ExternalScoring:
             teams[teamNum]['city'] = team["team"]["city"]
             teams[teamNum]['state'] = team["team"]["state_prov"]
             teams[teamNum]['country'] = team["team"]["country"]
+            teams[teamNum]['rank'] = rank
+            teams[teamNum]['qp'] = 0
+            teams[teamNum]['rp'] = 0
+            teams[teamNum]['highest'] = 0
+            teams[teamNum]['matches'] = 0
+            teams[teamNum]['real_matches'] = 0
+            teams[teamNum]['allianceScore'] = 0
+            teams[teamNum]['powerScore'] = 100
 
             if teams[teamNum]['name'] == None:
                 teams[teamNum]['name'] = ""
@@ -353,9 +360,20 @@ class ExternalScoring:
                 matches[match["match_key"]]['alliances']['blue']['endg'] = match["blue_end_score"]
                 matches[match["match_key"]]['alliances']['blue']['pen'] = match["red_penalty"]
 
+                matches[match['match_key']]['alliances']['red']['team1'] = match['participants'][0]['team']['team_number']
+                matches[match['match_key']]['alliances']['red']['team2'] = match['participants'][1]['team']['team_number']
+                teams[match['participants'][0]['team']['team_number']]['real_matches'] += 1
+                teams[match['participants'][1]['team']['team_number']]['real_matches'] += 1
+
+                matches[match['match_key']]['alliances']['blue']['team1'] = match['participants'][2]['team']['team_number']
+                matches[match['match_key']]['alliances']['blue']['team2'] = match['participants'][3]['team']['team_number']
+                teams[match['participants'][2]['team']['team_number']]['real_matches'] += 1
+                teams[match['participants'][3]['team']['team_number']]['real_matches'] += 1
+
         # Now, going through the "stations" to pick up the teams for the match.
         # Would have been nice it could have been included in the matches response...  oh well
 
+        '''
         for match in matchesJsonResult:
             if match['match_key'] in matches:
                 #print(match['participants'][0]['team']['team_number'])  # Red 1
@@ -374,6 +392,7 @@ class ExternalScoring:
                 teams[match['participants'][3]['team']['team_number']]['real_matches'] += 1
 
             #print(match['participants'])
+        '''
 
         '''
         for station in stationsJsonResult:
@@ -809,7 +828,10 @@ class PowerScoreScreen:
 
         # event and division info
         screen.addstr(8,self.centerSepColumn-4-int(len(event['title'])/2),">>> {} <<<".format(event['title']))
-        if event["subtitle"] != "":
+
+        p = re.compile('^\s?$')
+        #if event["subtitle"] != "":
+        if not p.match(event["subtitle"]):
             screen.addstr(9,self.centerSepColumn-4-int(len(event['subtitle'])/2),">>> {} <<<".format(event['subtitle']))
 
         # redraw the center separator
