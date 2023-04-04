@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 
 '''
-PowerScore Display - V4.0
+PowerScore Display - V5.0
 
 This is primarily intended to run on a Raspberry Pi connected to an HDMI Screen.  This *should* work on any terminal based system where
 python with ncurses is supported.  Python3 is required.  Note that this is a command line utility... you will need to run it from the
@@ -12,32 +12,35 @@ These commands should get the required libraries installed on a current raspberr
 
     sudo apt-get install python3-pip
     pip3 install requests
-    pip3 install beautifulsoup4
+    TODO this is probably not needed anymore ==> pip3 install beautifulsoup4
 
 If you're on another operating system (Windows, OSX, Ubuntu, etc), you're a little on your own.  If you can get python3 installed,
 along with the required python libraries, you should be able to get this working.
+
+As of this version, pulling scores from https://ftc-events.firstinspires.org/ is the only supported system.
+
+----------
+
+This version requires setting an API key in a file called "ftc-events-auth.key".  That file should have a single
+line with the basic auth string to use.  You can get your own auth key at https://ftc-events.firstinspires.org/services/API.
 
 ----------
 
 Sample Usages:
 
-(1) Data coming from the FTC scoring system web pages ... Single division sample using moftcscores.com
+(1) Single divsion
 
-    ./powerscore_display.py http://moftcscores.net/relic-recovery/event/q4
+    ./powerscore_display.py 2022 USMOKSCMP
 
-(2) Data coming from from ftcscores.com ... Dual division Sample
+(2) Multiple divisions.  Up to 4 divisions are supported.
 
-    ./powerscore_display.py https://ftcscores.com/event/huD_6Ue9 https://ftcscores.com/event/uy2ep0E1
-
-(3) Data coming from theorangealliance.org ...  Note - you must request your own unique API key from theorangealliance.org
-
-    ./powerscore_display.py -k enter-your-api-key-here https://theorangealliance.org/events/1718-MO-MSU
+    ./powerscore_display.py 2021 FTCCMP1FRNK FTCCMP1JEMI
 
 ----------
 
 MIT License
 
-Copyright (c) 2018 The Astromechs - FTC Team 3409
+Copyright (c) 2018-2023 The Astromechs - FTC Team 3409
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -65,7 +68,7 @@ import time
 import requests
 import sys
 import os.path
-from bs4 import BeautifulSoup
+#from bs4 import BeautifulSoup
 import re
 
 '''
@@ -111,57 +114,39 @@ matches =   {   1:
 
 class ExternalScoring:
     # Constructor
-    def __init__(self,division1URI,division2URI,apiKey):
-        self.division1URI = ""
-        self.division2URI = ""
-        self.setAPIKey(apiKey)
-        self.numDivisions = 0
-        self.currentDivision = 0
-        self.setURIs(division1URI,division2URI)
+    def __init__(self,season,division1,division2,division3,division4,auth):
+        self.season = season
+        self.division1 = division1
+        self.division2 = division2
+        self.division3 = division3
+        self.division4 = division4
+        self.auth = auth
 
-    def setAPIKey(self, apiKey):
-        self.apiKey = apiKey
-
-    # Set the URI's
-    def setURIs(self, division1URI, division2URI):
-        self.division1URI=division1URI
-        self.division2URI=division2URI
-
-        # Do a replacement if the url seems to be for ftcscores.com
-        #    https://ftcscores.com/event/huD_6Ue9 is an example ftcscores URL
-        #    https://api.ftcscores.com/api/events/huD_6Ue9 is the corresponding api URL
-        # Note: no effect if the api url was used, or if the url is not for ftcscores.com
-        self.division1URI = self.division1URI.replace("https://ftcscores.com/event/", "https://api.ftcscores.com/api/events/")
-        self.division2URI = self.division2URI.replace("https://ftcscores.com/event/", "https://api.ftcscores.com/api/events/")
-
-        # Do a replacement if the url seems to be for theorangealliance.org
-        #    https://theorangealliance.org/events/1718-MO-CAPS is an example ftcscores URL
-        #    https://theorangealliance.org/apiv2/event/1718-MO-CAPS is the corresponding event api URL
-        # Note: no effect if the api url was used, or if the url is not for ftcscores.com
-        self.division1URI = self.division1URI.replace("https://theorangealliance.org/events/", "https://theorangealliance.org/api/event/")
-        self.division2URI = self.division2URI.replace("https://theorangealliance.org/events/", "https://theorangealliance.org/api/event/")
-
-        if (self.division2URI == ""):
-            self.numDivisions=1
-            self.currentDivision=1
-
-        else:
+        self.numDivisions = 1
+        if (self.division4 != ""):
+            self.numDivisions=4
+        elif (self.division3 != ""):
+            self.numDivisions=3
+        elif (self.division2 != ""):
             self.numDivisions=2
-            self.currentDivision=1
+
+        self.currentDivision = 0
 
     # get the URI for the current division
-    def getCurrentDivisionURI(self):
-        if (self.currentDivision==1):
-            return self.division1URI
-        else:
-            return self.division2URI
+    def getCurrentDivision(self):
+        if (self.currentDivision==0):
+            return self.division1
+        elif (self.currentDivision==1):
+            return self.division2
+        elif (self.currentDivision==2):
+            return self.division3
+        elif (self.currentDivision==3):
+            return self.division4
 
-    # change the division
+    # change the division, wrap around at the maximum number of divisions
     def changeDivisions(self):
-        if (self.currentDivision==1 and self.numDivisions==2):
-            self.currentDivision=2
-        else:
-            self.currentDivision=1
+        self.currentDivision = self.currentDivision + 1
+        self.currentDivision = self.currentDivision % self.numDivisions
 
     # Get the data from the extenral system ... includes calculating powerscores
     def getEventTeamsMatches(self):
@@ -170,364 +155,189 @@ class ExternalScoring:
         teams = {}
         matches = {}
 
-        requestURI = self.getCurrentDivisionURI()
-
-        if "api.ftcscores.com" in requestURI:
-            # Specific logic for ftcscores.com
-            event, teams, matches = self.getEventTeamsMatches_ftcscores()
-
-        elif "theorangealliance.org/api" in requestURI:
-            # Specific logic for theorangealliance
-            event, teams, matches = self.getEventTeamsMatches_toa()
-
-        elif "worlds.pennfirst.org/cache/TeamInfo" in requestURI:
-            # Specific logic for worlds ... works for 2018 at least
-            event, teams, matches = self.getEventTeamsMatches_pennfirst()
-
-        else:
-            # Default logic - ftc scoring system
-            event, teams, matches = self.getEventTeamsMatches_default()
+        event, teams, matches = self.getEventTeamsMatchesFromFTC()
 
         # Now update powerscores
         self.__calculatePowerScore(teams, matches)
 
         return (event, teams, matches)
 
+    # Get data from theorangealliance <== USING THIS AS A TEMPLATE FOR CHANGING TO FTC-EVENTS
+    def getEventTeamsMatchesFromFTC(self):
 
-    # Get data from ftcscores
-    def getEventTeamsMatches_ftcscores(self):
+        requestDivision = self.getCurrentDivision()
 
-        requestURI = self.getCurrentDivisionURI()
-
-        event = {}
-        teams = {}
-        matches = {}
-
-        r=requests.get(requestURI, timeout=5)
-        jsonResult = r.json()
-
-        # Just a couple of event things
-        event['title'] = jsonResult['fullName']
-        event['subtitle'] = ""
-        if "subtitle" in jsonResult:
-            event['subtitle'] = jsonResult['subtitle']
-
-        # Assemble all the team info from the teams and rankings sections
-        if "teams" in jsonResult:
-            for team in jsonResult["teams"]:
-                teamNum = int(team)  # gonna force to an integer... makes it easier later
-                teams[teamNum] = {}
-                teams[teamNum]['number'] = teamNum
-                teams[teamNum]['name'] = jsonResult["teams"][team]["name"]
-                teams[teamNum]['school'] = jsonResult["teams"][team]["school"]
-                teams[teamNum]['city'] = jsonResult["teams"][team]["city"]
-                teams[teamNum]['state'] = jsonResult["teams"][team]["state"]
-                teams[teamNum]['country'] = jsonResult["teams"][team]["country"]
-
-        if "rankings" in jsonResult:
-            for ranking in jsonResult["rankings"]:
-                teamNum = ranking["number"]
-                teams[teamNum]['rank'] = ranking["rank"]
-                teams[teamNum]['qp'] = ranking["current"]["qp"]
-                teams[teamNum]['rp'] = ranking["current"]["rp"]
-                teams[teamNum]['highest'] = ranking["current"]["highest"]
-                teams[teamNum]['matches'] = ranking["current"]["matches"]
-                teams[teamNum]['real_matches'] = 0
-                teams[teamNum]['allianceScore'] = 0
-                teams[teamNum]['powerScore'] = 0
-
-
-        # Now grab the matches, we want completed qualifier matches only
-        if "rankings" in jsonResult:
-            for match in jsonResult["matches"]:
-                if ((match["number"].startswith("Q")) and (match["status"]=="done")):
-                    matches[match["number"]] = {}
-                    matches[match["number"]]['matchid'] = match["number"]
-                    matches[match["number"]]['alliances'] = {}
-
-                    matches[match["number"]]['alliances']['red'] = {}
-                    matches[match["number"]]['alliances']['red']['team1'] = match["teams"]['red'][0]['number']
-                    matches[match["number"]]['alliances']['red']['team2'] = match["teams"]['red'][1]['number']
-                    matches[match["number"]]['alliances']['red']['total'] = match["scores"]['red']
-                    matches[match["number"]]['alliances']['red']['auto'] = match["subscoresRed"]['auto']
-                    matches[match["number"]]['alliances']['red']['teleop'] = match["subscoresRed"]['tele']
-                    matches[match["number"]]['alliances']['red']['endg'] = match["subscoresRed"]['endg']
-                    matches[match["number"]]['alliances']['red']['pen'] = match["subscoresRed"]['pen']
-                    #also... udpate the "real matches"... to account for surrogates in powerscore
-                    teams[match["teams"]['red'][0]['number']]['real_matches']+=1
-                    teams[match["teams"]['red'][1]['number']]['real_matches']+=1
-
-                    matches[match["number"]]['alliances']['blue'] = {}
-                    matches[match["number"]]['alliances']['blue']['team1'] = match["teams"]['blue'][0]['number']
-                    matches[match["number"]]['alliances']['blue']['team2'] = match["teams"]['blue'][1]['number']
-                    matches[match["number"]]['alliances']['blue']['total'] = match["scores"]['blue']
-                    matches[match["number"]]['alliances']['blue']['auto'] = match["subscoresBlue"]['auto']
-                    matches[match["number"]]['alliances']['blue']['teleop'] = match["subscoresBlue"]['tele']
-                    matches[match["number"]]['alliances']['blue']['endg'] = match["subscoresBlue"]['endg']
-                    matches[match["number"]]['alliances']['blue']['pen'] = match["subscoresBlue"]['pen']
-                    #also... udpate the "real matches"... to account for surrogates in powerscore
-                    teams[match["teams"]['blue'][0]['number']]['real_matches']+=1
-                    teams[match["teams"]['blue'][1]['number']]['real_matches']+=1
-
-        return (event, teams, matches)
-
-    # Get data from theorangealliance
-    def getEventTeamsMatches_toa(self):
-
-        requestURI = self.getCurrentDivisionURI()
+        requestURI = "http://ftc-api.firstinspires.org/v2.0/"
 
         event = {}
         teams = {}
         matches = {}
+
+        # print("attempting request ...")
 
         # why, oh why, does toa make getting the event details so hard.  5 requests are necessary to get the data we need :(
-        r=requests.get(requestURI, headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'X-TOA-Key': self.apiKey},  timeout=5)
+        r=requests.get(requestURI+self.season+'/events?eventCode='+requestDivision, headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=5)
         eventJsonResult = r.json()
 
-        r=requests.get(requestURI+"/matches", headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'X-TOA-Key': self.apiKey},  timeout=5)
+        r=requests.get(requestURI+self.season+'/matches/'+requestDivision, headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=5)
         matchesJsonResult = r.json()
 
-        r=requests.get(requestURI+"/teams", headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'X-TOA-Key': self.apiKey},  timeout=5)
+        r=requests.get(requestURI+self.season+'/scores/'+requestDivision+"/qual", headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=5)
+        scoresJsonResult = r.json()
+
+        r=requests.get(requestURI+self.season+'/teams?eventCode='+requestDivision, headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=5)
         teamsJsonResult = r.json()
 
-        r=requests.get(requestURI+"/rankings", headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'X-TOA-Key': self.apiKey},  timeout=5)
+        r=requests.get(requestURI+self.season+'/rankings/'+requestDivision, headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=5)
         rankingsJsonResult = r.json()
 
+        # print(eventJsonResult)
+        # print("\n======================\n")
+        # print(matchesJsonResult)
+        # print("\n======================\n")
+        # print(teamsJsonResult)
+        # print("\n======================\n")
+        # print(rankingsJsonResult)
+        # print("\n======================\n")
+
+        # print(scoresJsonResult)
+        # print("\n======================\n")
+        
+
+
         # Just a couple of event things
-        event['title'] = eventJsonResult[0]['event_name']
-        event['subtitle'] = ""
-        if "division_name" in eventJsonResult:
-            event['subtitle'] = eventJsonResult[0]['division_name']
+        event['title'] = eventJsonResult['events'][0]['name']
+        #event['subtitle'] = ""
+        #if "division_name" in eventJsonResult:
+        #    event['subtitle'] = eventJsonResult[0]['division_name']
+
+        # print("Event Name: "+ event['title'])
 
         # Assemble all the team info from the teams request
-        rank=0
-        for team in teamsJsonResult:
-            rank+=1
-            teamNum = int(team["team_key"])
+        for team in teamsJsonResult['teams']:
+            teamNum = team["teamNumber"]
             teams[teamNum] = {}
             teams[teamNum]['number'] = teamNum
-            teams[teamNum]['name'] = team["team"]["team_name_short"]
+            teams[teamNum]['name'] = team["nameShort"]
             teams[teamNum]['school'] = ''
-            teams[teamNum]['city'] = team["team"]["city"]
-            teams[teamNum]['state'] = team["team"]["state_prov"]
-            teams[teamNum]['country'] = team["team"]["country"]
-            teams[teamNum]['rank'] = rank
-            teams[teamNum]['qp'] = 0
+            teams[teamNum]['city'] = team["city"]
+            teams[teamNum]['state'] = team["stateProv"]
+            teams[teamNum]['country'] = team["country"]
+            teams[teamNum]['rank'] = 1000    # this forces any non-competing teams to the bottom
             teams[teamNum]['rp'] = 0
+            teams[teamNum]['tbp'] = 0
             teams[teamNum]['highest'] = 0
             teams[teamNum]['matches'] = 0
             teams[teamNum]['real_matches'] = 0
             teams[teamNum]['allianceScore'] = 0
-            teams[teamNum]['powerScore'] = 100
+            teams[teamNum]['autoAllianceScore'] = 0
+            teams[teamNum]['teleAllianceScore'] = 0
+            teams[teamNum]['endgAllianceScore'] = 0
+            teams[teamNum]['powerScore'] = 0
+            teams[teamNum]['autoPowerScore'] = 0
+            teams[teamNum]['telePowerScore'] = 0
+            teams[teamNum]['endgPowerScore'] = 0
 
             if teams[teamNum]['name'] == None:
                 teams[teamNum]['name'] = ""
 
+
+
         # Add in the ranking information
-        for ranking in rankingsJsonResult:
-            teamNum = int(ranking["team_key"])
+        for ranking in rankingsJsonResult['Rankings']:
+            teamNum = ranking["teamNumber"]
             teams[teamNum]['rank'] = ranking["rank"]
-            teams[teamNum]['qp'] = ranking["ranking_points"]
-            teams[teamNum]['rp'] = ranking["tie_breaker_points"]
-            teams[teamNum]['highest'] = ranking["highest_qual_score"]
-            teams[teamNum]['matches'] = ranking["played"]
-            teams[teamNum]['real_matches'] = 0
-            teams[teamNum]['allianceScore'] = 0
-            teams[teamNum]['powerScore'] = 0
+            teams[teamNum]['rp'] = ranking["sortOrder1"]
+            teams[teamNum]['tbp'] = ranking["sortOrder2"]
+            teams[teamNum]['highest'] = ranking["sortOrder4"]
+            teams[teamNum]['matches'] = ranking["matchesPlayed"]
+            # teams[teamNum]['allianceScore'] = 0
+            # teams[teamNum]['autoAllianceScore'] = 0
+            # teams[teamNum]['teleAllianceScore'] = 0
+            # teams[teamNum]['endgAllianceScore'] = 0
+            # teams[teamNum]['powerScore'] = 100
+            # teams[teamNum]['autoPowerScore'] = 100
+            # teams[teamNum]['telePowerScore'] = 100
+            # teams[teamNum]['endgPowerScore'] = 100
+
+
+
 
 
         # Now build up the qualifier matches
-        for match in matchesJsonResult:
+        for match in matchesJsonResult['matches']:
 
-            # This seems to mark a qualifier match, but they haven't documented it
-            # Still have no idea how an upcoming match is delineated... so making best guess
-            if ((match["tournament_level"]==1) and (match["blue_score"]!=None)):
-                matches[match["match_key"]] = {}
-                matches[match["match_key"]]['matchid'] = match["match_key"]
-                matches[match["match_key"]]['alliances'] = {}
+            # Stuff to be verified here.  Is the penalty listed for the correct team?  Should there be a filter
+            #  for only played matches?
+            if (match["tournamentLevel"]=="QUALIFICATION"):
 
-                matches[match["match_key"]]['alliances']['red'] = {}
-                matches[match["match_key"]]['alliances']['red']['total'] = match["red_score"]
-                matches[match["match_key"]]['alliances']['red']['auto'] = match["red_auto_score"]
-                matches[match["match_key"]]['alliances']['red']['teleop'] = match["red_tele_score"]
-                matches[match["match_key"]]['alliances']['red']['endg'] = match["red_end_score"]
-                matches[match["match_key"]]['alliances']['red']['pen'] = match["blue_penalty"]
+                matchScore = []
+                # we have the match, we need to get the scoring object as well
+                for score in scoresJsonResult['MatchScores']:
+                    if score['matchNumber'] == match['matchNumber']:
+                        matchScore = score;
+                        break;
+                
+                # Now figure out the teams in the match
+                red1 = 0;
+                red2 = 0;
+                blue1 = 0;
+                blue2 = 0;
+                for j in match['teams']:
+                    if j['station'] == "Red1":
+                        red1 = j['teamNumber']
+                    elif j['station'] == "Red2":
+                        red2 = j['teamNumber']
+                    elif j['station'] == "Blue1":
+                        blue1 = j['teamNumber']
+                    elif j['station'] == "Blue2":
+                        blue2 = j['teamNumber']
 
-                matches[match["match_key"]]['alliances']['blue'] = {}
-                matches[match["match_key"]]['alliances']['blue']['total'] = match["blue_score"]
-                matches[match["match_key"]]['alliances']['blue']['auto'] = match["blue_auto_score"]
-                matches[match["match_key"]]['alliances']['blue']['teleop'] = match["blue_tele_score"]
-                matches[match["match_key"]]['alliances']['blue']['endg'] = match["blue_end_score"]
-                matches[match["match_key"]]['alliances']['blue']['pen'] = match["red_penalty"]
+                # now find the red scores vs the blue scores
+                redScore = [];
+                blueScore = [];
+                for j in score['alliances']:
+                    if j['alliance'] == "Red":
+                        redScore = j;
+                    elif j['alliance'] == "Blue":
+                        blueScore = j;
 
-                matches[match['match_key']]['alliances']['red']['team1'] = match['participants'][0]['team']['team_number']
-                matches[match['match_key']]['alliances']['red']['team2'] = match['participants'][1]['team']['team_number']
-                teams[match['participants'][0]['team']['team_number']]['real_matches'] += 1
-                teams[match['participants'][1]['team']['team_number']]['real_matches'] += 1
+                matches[match["matchNumber"]] = {}
+                matches[match["matchNumber"]]['matchid'] = match["matchNumber"]
+                matches[match["matchNumber"]]['alliances'] = {}
 
-                matches[match['match_key']]['alliances']['blue']['team1'] = match['participants'][2]['team']['team_number']
-                matches[match['match_key']]['alliances']['blue']['team2'] = match['participants'][3]['team']['team_number']
-                teams[match['participants'][2]['team']['team_number']]['real_matches'] += 1
-                teams[match['participants'][3]['team']['team_number']]['real_matches'] += 1
+                matches[match["matchNumber"]]['alliances']['red'] = {}
+                matches[match["matchNumber"]]['alliances']['red']['total'] = redScore['totalPoints']
+                matches[match["matchNumber"]]['alliances']['red']['auto'] = redScore['autoPoints']
+                matches[match["matchNumber"]]['alliances']['red']['teleop'] = redScore['dcPoints']
+                matches[match["matchNumber"]]['alliances']['red']['endg'] = redScore['endgamePoints']
+                matches[match["matchNumber"]]['alliances']['red']['pen'] = blueScore['penaltyPointsCommitted']
+
+                matches[match["matchNumber"]]['alliances']['blue'] = {}
+                matches[match["matchNumber"]]['alliances']['blue']['total'] = blueScore['totalPoints']
+                matches[match["matchNumber"]]['alliances']['blue']['auto'] = blueScore['autoPoints']
+                matches[match["matchNumber"]]['alliances']['blue']['teleop'] = blueScore['dcPoints']
+                matches[match["matchNumber"]]['alliances']['blue']['endg'] = blueScore['endgamePoints']
+                matches[match["matchNumber"]]['alliances']['blue']['pen'] = redScore['penaltyPointsCommitted']
+
+                matches[match['matchNumber']]['alliances']['red']['team1'] = red1
+                matches[match['matchNumber']]['alliances']['red']['team2'] = red2
+                teams[red1]['real_matches'] += 1
+                teams[red2]['real_matches'] += 1
+
+                matches[match['matchNumber']]['alliances']['blue']['team1'] = blue1
+                matches[match['matchNumber']]['alliances']['blue']['team2'] = blue2
+                teams[blue1]['real_matches'] += 1
+                teams[blue2]['real_matches'] += 1
 
         # Now, going through the "stations" to pick up the teams for the match.
         # Would have been nice it could have been included in the matches response...  oh well
 
-        '''
-        for match in matchesJsonResult:
-            if match['match_key'] in matches:
-                #print(match['participants'][0]['team']['team_number'])  # Red 1
-                #print(match['participants'][1])  # Red 2
-                #print(match['participants'][2])  # Blue 1
-                #print(match['participants'][3])  # Blue 2
-                #print(match)
-                matches[match['match_key']]['alliances']['red']['team1'] = match['participants'][0]['team']['team_number']
-                matches[match['match_key']]['alliances']['red']['team2'] = match['participants'][1]['team']['team_number']
-                teams[match['participants'][0]['team']['team_number']]['real_matches'] += 1
-                teams[match['participants'][1]['team']['team_number']]['real_matches'] += 1
-
-                matches[match['match_key']]['alliances']['blue']['team1'] = match['participants'][2]['team']['team_number']
-                matches[match['match_key']]['alliances']['blue']['team2'] = match['participants'][3]['team']['team_number']
-                teams[match['participants'][2]['team']['team_number']]['real_matches'] += 1
-                teams[match['participants'][3]['team']['team_number']]['real_matches'] += 1
-
-            #print(match['participants'])
-        '''
-
-        '''
-        for station in stationsJsonResult:
-            if (station["match_key"] in matches):
-
-                # red teams
-                matches[station["match_key"]]['alliances']['red']['team1'] = int(station["teams"].split(",")[0])
-                matches[station["match_key"]]['alliances']['red']['team2'] = int(station["teams"].split(",")[1])
-                #also... udpate the "real matches"... to account for surrogates in powerscore
-                teams[int(station["teams"].split(",")[0])]['real_matches']+=1
-                teams[int(station["teams"].split(",")[1])]['real_matches']+=1
-
-                # blue teams
-                matches[station["match_key"]]['alliances']['blue']['team1'] = int(station["teams"].split(",")[2])
-                matches[station["match_key"]]['alliances']['blue']['team2'] = int(station["teams"].split(",")[3])
-                #also... udpate the "real matches"... to account for surrogates in powerscore
-                teams[int(station["teams"].split(",")[2])]['real_matches']+=1
-                teams[int(station["teams"].split(",")[3])]['real_matches']+=1
-        '''
-        return (event, teams, matches)
-
-    # Get the data the default way ... e.g. from the socring software
-    def getEventTeamsMatches_default(self):
-        requestURI = self.getCurrentDivisionURI()
-        return self.getEventTeamsMatches_ScoringURLs(requestURI+"/TeamList", requestURI+"/Rankings", requestURI+"/MatchDetails")
-
-    # Special case for worlds, or an event that follows the worlds/pennfirst pattern
-    def getEventTeamsMatches_pennfirst(self):
-        # The expectation here is that the url is pointing at the TeamInfo page
-        #http://houston.worlds.pennfirst.org/cache/TeamInfo_2018_World_Championship_Franklin.html?_=1524026469419
-        requestURI = self.getCurrentDivisionURI()
-        p = re.compile('(http://.*/cache/)TeamInfo(.*\.html).*')
-        m = p.match(requestURI)
-
-        teamListURL = m.group(1)+'TeamInfo'+m.group(2)
-        rankingsURL = m.group(1)+'Rankings'+m.group(2)
-        matchDetailsURL = m.group(1)+'MatchResultsDetails'+m.group(2)   # why was this renamed from MatchDetails on pennfirst???
-
-        return self.getEventTeamsMatches_ScoringURLs(teamListURL,rankingsURL,matchDetailsURL)
-
-    # commoon method to handle the ftc scoring system urls ... helps becuase of events that do goofy things with URLs
-    def getEventTeamsMatches_ScoringURLs(self,teamListURL, rankingsURL, matchDetailsURL):
-
-        event = {}
-        teams = {}
-        matches = {}
-
-        # Not one of the specific known use cases ... so try as though it's the scoring software
-        r=requests.get(teamListURL, timeout=3)
-        teamListHTML = r.text
-        teamList = BeautifulSoup(teamListHTML, "html.parser")
-
-        r=requests.get(rankingsURL, timeout=3)
-        rankingsHTML = r.text
-        rankings = BeautifulSoup(rankingsHTML,"html.parser")
-
-        r=requests.get(matchDetailsURL, timeout=3)
-        matchDetailsHTML = r.text
-        matchDetails = BeautifulSoup(matchDetailsHTML,"html.parser")
-
-        # If we got here without failing, then we probably have a good set of data
-
-        h2 = teamList.html.center.h2
-        # Just a couple of event things
-        event['title'] = h2.contents[0]
-        event['subtitle'] = ""
-        if (len(h2.contents)>3):
-            event['subtitle'] = h2.contents[2].lstrip()
-
-        # Get teams from the team list
-        i=0
-        for tr in  teamList.html.div.table.find_all("tr"):
-            i+=1
-            if i>1:
-                teamNum = int(tr.contents[0].string)
-                teams[teamNum] = {}
-                teams[teamNum]['number'] = teamNum
-                teams[teamNum]['name'] = tr.contents[1].string
-                teams[teamNum]['school'] = tr.contents[2].string
-                teams[teamNum]['city'] = tr.contents[3].string
-                teams[teamNum]['state'] = tr.contents[4].string
-                teams[teamNum]['country'] = tr.contents[5].string
-        # Add in the Ranking info
-        i=0
-        for tr in  rankings.html.div.table.find_all("tr"):
-            i+=1
-            if i>1:
-                teamNum = int(tr.contents[1].string)
-                teams[teamNum]['rank'] = int(tr.contents[0].string)
-                teams[teamNum]['qp'] = int(tr.contents[3].string)
-                teams[teamNum]['rp'] = int(tr.contents[4].string)
-                teams[teamNum]['highest'] = int(tr.contents[5].string)
-                teams[teamNum]['matches'] = int(tr.contents[6].string)
-                teams[teamNum]['real_matches'] = 0
-                teams[teamNum]['allianceScore'] = 0
-                teams[teamNum]['powerScore'] = 0
-
-        # Now grab the matches, we want completed qualifier matches only
-        i=0
-        for tr in  matchDetails.html.div.table.find_all("tr"):
-            i+=1
-            if i>2:
-                if (("-" in tr.contents[1].string) and ("Q" in tr.contents[0].string)):
-                    # A dash in the score column means we have a score, so the match has been played
-                    # A Q in the first column means it's a qualifier match
-                    matchNum = int(tr.contents[0].string.split("-")[1])
-                    matches[matchNum] = {}
-                    matches[matchNum]['matchid'] = matchNum
-                    matches[matchNum]['alliances'] = {}
-
-                    matches[matchNum]['alliances']['red'] = {}
-                    matches[matchNum]['alliances']['red']['team1'] = int(tr.contents[2].string.split()[0].replace("*",""))
-                    matches[matchNum]['alliances']['red']['team2'] = int(tr.contents[2].string.split()[1].replace("*",""))
-                    matches[matchNum]['alliances']['red']['total'] = int(tr.contents[4].string)
-                    matches[matchNum]['alliances']['red']['auto'] = int(tr.contents[5].string)
-                    matches[matchNum]['alliances']['red']['teleop'] = int(tr.contents[7].string)
-                    matches[matchNum]['alliances']['red']['endg'] = int(tr.contents[8].string)
-                    matches[matchNum]['alliances']['red']['pen'] = int(tr.contents[9].string)
-                    #also... udpate the "real matches"... to account for surrogates in powerscore
-                    teams[int(tr.contents[2].string.split()[0].replace("*",""))]['real_matches']+=1
-                    teams[int(tr.contents[2].string.split()[1].replace("*",""))]['real_matches']+=1
-
-                    matches[matchNum]['alliances']['blue'] = {}
-                    matches[matchNum]['alliances']['blue']['team1'] = int(tr.contents[3].string.split()[0].replace("*",""))
-                    matches[matchNum]['alliances']['blue']['team2'] = int(tr.contents[3].string.split()[1].replace("*",""))
-                    matches[matchNum]['alliances']['blue']['total'] = int(tr.contents[10].string)
-                    matches[matchNum]['alliances']['blue']['auto'] = int(tr.contents[11].string)
-                    matches[matchNum]['alliances']['blue']['teleop'] = int(tr.contents[13].string)
-                    matches[matchNum]['alliances']['blue']['endg'] = int(tr.contents[14].string)
-                    matches[matchNum]['alliances']['blue']['pen'] = int(tr.contents[15].string)
-                    #also... udpate the "real matches"... to account for surrogates in powerscore
-                    teams[int(tr.contents[3].string.split()[0].replace("*",""))]['real_matches']+=1
-                    teams[int(tr.contents[3].string.split()[1].replace("*",""))]['real_matches']+=1
+        # print(teams)
+        #print(matches)
 
         return (event, teams, matches)
+
 
 
     # update the PowerScore data for the teams dict object
@@ -543,34 +353,118 @@ class ExternalScoring:
         allianceScores = {}
         for teamNum in teams:
             allianceScores[teamNum] = 0.;
+        
+        #print("powerscore ...")
 
-        # Now do the allianceScores total
+        # Now do the allianceScores ... this is needed to "kick off" the calculation
         for matchid in matches:
             match = matches[matchid]
-            adjBlueScore = match["alliances"]["blue"]["total"]-match["alliances"]["blue"]["pen"]
-            adjRedScore = match["alliances"]["red"]["total"]-match["alliances"]["red"]["pen"]
+
             # The math here takes care of the 50-50 split - each team in an alliance get credit for 50% of the scoring (we'll fix that later)
             # There's also a division by the number of matches for each team ... this has the effect of normalizing to the number of matches played
+
+            # overall powerscore
+            adjBlueScore = match["alliances"]["blue"]["total"]-match["alliances"]["blue"]["pen"]
+            adjRedScore = match["alliances"]["red"]["total"]-match["alliances"]["red"]["pen"]
             teams[match["alliances"]["blue"]["team1"]]['allianceScore'] += adjBlueScore/(2.*teams[match["alliances"]["blue"]["team1"]]['real_matches'])
             teams[match["alliances"]["blue"]["team2"]]['allianceScore'] += adjBlueScore/(2.*teams[match["alliances"]["blue"]["team2"]]['real_matches'])
             teams[match["alliances"]["red"]["team1"]]['allianceScore'] += adjRedScore/(2.*teams[match["alliances"]["red"]["team1"]]['real_matches'])
             teams[match["alliances"]["red"]["team2"]]['allianceScore'] += adjRedScore/(2.*teams[match["alliances"]["red"]["team2"]]['real_matches'])
 
-        # OK... now on to powerScores
-        for matchid in matches:
-            match = matches[matchid]
+            # auto powerscore
+            adjBlueScore = match["alliances"]["blue"]["auto"]
+            adjRedScore = match["alliances"]["red"]["auto"]
+            teams[match["alliances"]["blue"]["team1"]]['autoAllianceScore'] += adjBlueScore/(2.*teams[match["alliances"]["blue"]["team1"]]['real_matches'])
+            teams[match["alliances"]["blue"]["team2"]]['autoAllianceScore'] += adjBlueScore/(2.*teams[match["alliances"]["blue"]["team2"]]['real_matches'])
+            teams[match["alliances"]["red"]["team1"]]['autoAllianceScore'] += adjRedScore/(2.*teams[match["alliances"]["red"]["team1"]]['real_matches'])
+            teams[match["alliances"]["red"]["team2"]]['autoAllianceScore'] += adjRedScore/(2.*teams[match["alliances"]["red"]["team2"]]['real_matches'])
 
-            adjBlueScore = match["alliances"]["blue"]["total"]-match["alliances"]["blue"]["pen"]
-            adjRedScore = match["alliances"]["red"]["total"]-match["alliances"]["red"]["pen"]
+            # teleop powerscore
+            adjBlueScore = match["alliances"]["blue"]["teleop"]
+            adjRedScore = match["alliances"]["red"]["teleop"]
+            teams[match["alliances"]["blue"]["team1"]]['teleAllianceScore'] += adjBlueScore/(2.*teams[match["alliances"]["blue"]["team1"]]['real_matches'])
+            teams[match["alliances"]["blue"]["team2"]]['teleAllianceScore'] += adjBlueScore/(2.*teams[match["alliances"]["blue"]["team2"]]['real_matches'])
+            teams[match["alliances"]["red"]["team1"]]['teleAllianceScore'] += adjRedScore/(2.*teams[match["alliances"]["red"]["team1"]]['real_matches'])
+            teams[match["alliances"]["red"]["team2"]]['teleAllianceScore'] += adjRedScore/(2.*teams[match["alliances"]["red"]["team2"]]['real_matches'])
 
-            # Now, split up the scores, not on a 50-50 split like we did the first time, but based on the alliance scores for each team that we just calculated
-            # Again, we're doing the division by the number of matches to normalize to the number of matches played
-            if (teams[match["alliances"]["blue"]["team1"]]['allianceScore'] + teams[match["alliances"]["blue"]["team2"]]['allianceScore']) >0:
-                teams[match["alliances"]["blue"]["team1"]]['powerScore'] += adjBlueScore * teams[match["alliances"]["blue"]["team1"]]['allianceScore']/ ((teams[match["alliances"]["blue"]["team1"]]['allianceScore'] + teams[match["alliances"]["blue"]["team2"]]['allianceScore'])* teams[match["alliances"]["blue"]["team1"]]['real_matches'])
-                teams[match["alliances"]["blue"]["team2"]]['powerScore'] += adjBlueScore * teams[match["alliances"]["blue"]["team2"]]['allianceScore']/ ((teams[match["alliances"]["blue"]["team1"]]['allianceScore'] + teams[match["alliances"]["blue"]["team2"]]['allianceScore'])* teams[match["alliances"]["blue"]["team2"]]['real_matches'])
-            if (teams[match["alliances"]["red"]["team1"]]['allianceScore'] + teams[match["alliances"]["red"]["team2"]]['allianceScore']) >0:
-                teams[match["alliances"]["red"]["team1"]]['powerScore'] += adjRedScore * teams[match["alliances"]["red"]["team1"]]['allianceScore']/ ((teams[match["alliances"]["red"]["team1"]]['allianceScore'] + teams[match["alliances"]["red"]["team2"]]['allianceScore'])* teams[match["alliances"]["red"]["team1"]]['real_matches'])
-                teams[match["alliances"]["red"]["team2"]]['powerScore'] += adjRedScore * teams[match["alliances"]["red"]["team2"]]['allianceScore']/ ((teams[match["alliances"]["red"]["team1"]]['allianceScore'] + teams[match["alliances"]["red"]["team2"]]['allianceScore'])* teams[match["alliances"]["red"]["team2"]]['real_matches'])
+            # teleop powerscore
+            adjBlueScore = match["alliances"]["blue"]["endg"]
+            adjRedScore = match["alliances"]["red"]["endg"]
+            teams[match["alliances"]["blue"]["team1"]]['endgAllianceScore'] += adjBlueScore/(2.*teams[match["alliances"]["blue"]["team1"]]['real_matches'])
+            teams[match["alliances"]["blue"]["team2"]]['endgAllianceScore'] += adjBlueScore/(2.*teams[match["alliances"]["blue"]["team2"]]['real_matches'])
+            teams[match["alliances"]["red"]["team1"]]['endgAllianceScore'] += adjRedScore/(2.*teams[match["alliances"]["red"]["team1"]]['real_matches'])
+            teams[match["alliances"]["red"]["team2"]]['endgAllianceScore'] += adjRedScore/(2.*teams[match["alliances"]["red"]["team2"]]['real_matches'])
+
+        # Now on to powerScores ...
+        # We'll do a 10 round calculation (tends to work fairly well)
+        for i in range(1, 10):
+    
+            # we build up the powerscore for each team, starting from 0
+            for teamid in teams:
+                teams[teamid]['powerScore'] = 0
+                teams[teamid]['autoPowerScore'] = 0
+                teams[teamid]['telePowerScore'] = 0
+                teams[teamid]['endgPowerScore'] = 0
+
+            # now we loop through each match, and break up the score based on relative scoring performance.
+            for matchid in matches:
+                match = matches[matchid]
+
+                # Now, split up the scores, not on a 50-50 split like we did the first time, but based on the alliance scores for each team that we just calculated
+                # Again, we're doing the division by the number of matches to normalize to the number of matches played
+
+                # overall powerscore
+                adjBlueScore = match["alliances"]["blue"]["total"]-match["alliances"]["blue"]["pen"]
+                adjRedScore = match["alliances"]["red"]["total"]-match["alliances"]["red"]["pen"]
+                if (teams[match["alliances"]["blue"]["team1"]]['allianceScore'] + teams[match["alliances"]["blue"]["team2"]]['allianceScore']) >0:
+                    teams[match["alliances"]["blue"]["team1"]]['powerScore'] += adjBlueScore * teams[match["alliances"]["blue"]["team1"]]['allianceScore']/ ((teams[match["alliances"]["blue"]["team1"]]['allianceScore'] + teams[match["alliances"]["blue"]["team2"]]['allianceScore'])* teams[match["alliances"]["blue"]["team1"]]['real_matches'])
+                    teams[match["alliances"]["blue"]["team2"]]['powerScore'] += adjBlueScore * teams[match["alliances"]["blue"]["team2"]]['allianceScore']/ ((teams[match["alliances"]["blue"]["team1"]]['allianceScore'] + teams[match["alliances"]["blue"]["team2"]]['allianceScore'])* teams[match["alliances"]["blue"]["team2"]]['real_matches'])
+                if (teams[match["alliances"]["red"]["team1"]]['allianceScore'] + teams[match["alliances"]["red"]["team2"]]['allianceScore']) >0:
+                    teams[match["alliances"]["red"]["team1"]]['powerScore'] += adjRedScore * teams[match["alliances"]["red"]["team1"]]['allianceScore']/ ((teams[match["alliances"]["red"]["team1"]]['allianceScore'] + teams[match["alliances"]["red"]["team2"]]['allianceScore'])* teams[match["alliances"]["red"]["team1"]]['real_matches'])
+                    teams[match["alliances"]["red"]["team2"]]['powerScore'] += adjRedScore * teams[match["alliances"]["red"]["team2"]]['allianceScore']/ ((teams[match["alliances"]["red"]["team1"]]['allianceScore'] + teams[match["alliances"]["red"]["team2"]]['allianceScore'])* teams[match["alliances"]["red"]["team2"]]['real_matches'])
+
+                # overall powerscore
+                adjBlueScore = match["alliances"]["blue"]["auto"]
+                adjRedScore = match["alliances"]["red"]["auto"]
+                if (teams[match["alliances"]["blue"]["team1"]]['autoAllianceScore'] + teams[match["alliances"]["blue"]["team2"]]['autoAllianceScore']) >0:
+                    teams[match["alliances"]["blue"]["team1"]]['powerScore'] += adjBlueScore * teams[match["alliances"]["blue"]["team1"]]['autoAllianceScore']/ ((teams[match["alliances"]["blue"]["team1"]]['autoAllianceScore'] + teams[match["alliances"]["blue"]["team2"]]['autoAllianceScore'])* teams[match["alliances"]["blue"]["team1"]]['real_matches'])
+                    teams[match["alliances"]["blue"]["team2"]]['powerScore'] += adjBlueScore * teams[match["alliances"]["blue"]["team2"]]['autoAllianceScore']/ ((teams[match["alliances"]["blue"]["team1"]]['autoAllianceScore'] + teams[match["alliances"]["blue"]["team2"]]['autoAllianceScore'])* teams[match["alliances"]["blue"]["team2"]]['real_matches'])
+                if (teams[match["alliances"]["red"]["team1"]]['autoAllianceScore'] + teams[match["alliances"]["red"]["team2"]]['autoAllianceScore']) >0:
+                    teams[match["alliances"]["red"]["team1"]]['powerScore'] += adjRedScore * teams[match["alliances"]["red"]["team1"]]['autoAllianceScore']/ ((teams[match["alliances"]["red"]["team1"]]['autoAllianceScore'] + teams[match["alliances"]["red"]["team2"]]['autoAllianceScore'])* teams[match["alliances"]["red"]["team1"]]['real_matches'])
+                    teams[match["alliances"]["red"]["team2"]]['powerScore'] += adjRedScore * teams[match["alliances"]["red"]["team2"]]['autoAllianceScore']/ ((teams[match["alliances"]["red"]["team1"]]['autoAllianceScore'] + teams[match["alliances"]["red"]["team2"]]['autoAllianceScore'])* teams[match["alliances"]["red"]["team2"]]['real_matches'])
+
+                # overall powerscore
+                adjBlueScore = match["alliances"]["blue"]["teleop"]
+                adjRedScore = match["alliances"]["red"]["teleop"]
+                if (teams[match["alliances"]["blue"]["team1"]]['teleAllianceScore'] + teams[match["alliances"]["blue"]["team2"]]['teleAllianceScore']) >0:
+                    teams[match["alliances"]["blue"]["team1"]]['powerScore'] += adjBlueScore * teams[match["alliances"]["blue"]["team1"]]['teleAllianceScore']/ ((teams[match["alliances"]["blue"]["team1"]]['teleAllianceScore'] + teams[match["alliances"]["blue"]["team2"]]['teleAllianceScore'])* teams[match["alliances"]["blue"]["team1"]]['real_matches'])
+                    teams[match["alliances"]["blue"]["team2"]]['powerScore'] += adjBlueScore * teams[match["alliances"]["blue"]["team2"]]['teleAllianceScore']/ ((teams[match["alliances"]["blue"]["team1"]]['teleAllianceScore'] + teams[match["alliances"]["blue"]["team2"]]['teleAllianceScore'])* teams[match["alliances"]["blue"]["team2"]]['real_matches'])
+                if (teams[match["alliances"]["red"]["team1"]]['teleAllianceScore'] + teams[match["alliances"]["red"]["team2"]]['teleAllianceScore']) >0:
+                    teams[match["alliances"]["red"]["team1"]]['powerScore'] += adjRedScore * teams[match["alliances"]["red"]["team1"]]['teleAllianceScore']/ ((teams[match["alliances"]["red"]["team1"]]['teleAllianceScore'] + teams[match["alliances"]["red"]["team2"]]['teleAllianceScore'])* teams[match["alliances"]["red"]["team1"]]['real_matches'])
+                    teams[match["alliances"]["red"]["team2"]]['powerScore'] += adjRedScore * teams[match["alliances"]["red"]["team2"]]['teleAllianceScore']/ ((teams[match["alliances"]["red"]["team1"]]['teleAllianceScore'] + teams[match["alliances"]["red"]["team2"]]['teleAllianceScore'])* teams[match["alliances"]["red"]["team2"]]['real_matches'])
+
+                # overall powerscore
+                adjBlueScore = match["alliances"]["blue"]["endg"]
+                adjRedScore = match["alliances"]["red"]["endg"]
+                if (teams[match["alliances"]["blue"]["team1"]]['endgAllianceScore'] + teams[match["alliances"]["blue"]["team2"]]['endgAllianceScore']) >0:
+                    teams[match["alliances"]["blue"]["team1"]]['powerScore'] += adjBlueScore * teams[match["alliances"]["blue"]["team1"]]['endgAllianceScore']/ ((teams[match["alliances"]["blue"]["team1"]]['endgAllianceScore'] + teams[match["alliances"]["blue"]["team2"]]['endgAllianceScore'])* teams[match["alliances"]["blue"]["team1"]]['real_matches'])
+                    teams[match["alliances"]["blue"]["team2"]]['powerScore'] += adjBlueScore * teams[match["alliances"]["blue"]["team2"]]['endgAllianceScore']/ ((teams[match["alliances"]["blue"]["team1"]]['endgAllianceScore'] + teams[match["alliances"]["blue"]["team2"]]['endgAllianceScore'])* teams[match["alliances"]["blue"]["team2"]]['real_matches'])
+                if (teams[match["alliances"]["red"]["team1"]]['endgAllianceScore'] + teams[match["alliances"]["red"]["team2"]]['endgAllianceScore']) >0:
+                    teams[match["alliances"]["red"]["team1"]]['powerScore'] += adjRedScore * teams[match["alliances"]["red"]["team1"]]['endgAllianceScore']/ ((teams[match["alliances"]["red"]["team1"]]['endgAllianceScore'] + teams[match["alliances"]["red"]["team2"]]['endgAllianceScore'])* teams[match["alliances"]["red"]["team1"]]['real_matches'])
+                    teams[match["alliances"]["red"]["team2"]]['powerScore'] += adjRedScore * teams[match["alliances"]["red"]["team2"]]['endgAllianceScore']/ ((teams[match["alliances"]["red"]["team1"]]['endgAllianceScore'] + teams[match["alliances"]["red"]["team2"]]['endgAllianceScore'])* teams[match["alliances"]["red"]["team2"]]['real_matches'])
+
+
+            # now save the current powerScore as the allianceScore - for use in the next round of calculation if necessary
+            for teamid in teams:
+                teams[teamid]['allianceScore'] = teams[teamid]['powerScore'] 
+                teams[teamid]['autoAllianceScore'] = teams[teamid]['autoPowerScore'] 
+                teams[teamid]['teleAllianceScore'] = teams[teamid]['telePowerScore'] 
+                teams[teamid]['endgAllianceScore'] = teams[teamid]['endgPowerScore'] 
+                
+    # all done with the PowerScore calc
+            
+
+        
 #
 # PowerScoreScreen
 #
@@ -588,9 +482,12 @@ class PowerScoreScreen:
         # Redefine yellow to be closer to the safety green for the Astromechs
         curses.init_color(curses.COLOR_YELLOW, 680,1000,0)
 
+        curses.curs_set(0)
+
         self.showDualDiv=False
         self.showMultiPage=False
         self.pageNum=1
+        self.demoWinVisible = False
 
         self.remeasure()
         screen.clear()
@@ -600,6 +497,9 @@ class PowerScoreScreen:
     # refresh the screeen (wrapper for the curses refresh)
     def refresh(self):
         self.screen.refresh()
+
+        if self.demoWinVisible:
+            self.drawDemoWin()
 
     # recalculate all the key positions on the page
     def remeasure(self):
@@ -652,6 +552,19 @@ class PowerScoreScreen:
         if (self.showMultiPage):
             self.pageNum+=1
 
+    def showDemoWin(self, shouldShow):
+        self.demoWinVisible = shouldShow
+
+    def drawDemoWin(self):
+
+        # THIS IS WRONG!  Don't lose the reference to the window!
+
+        # just a demo window
+        # w = curses.newwin(20,30,10,10)
+        # w.border( '|', '|', '-', '-', '+', '+', '+', '+')
+        # w.refresh();
+        pass
+
     # draw the Overlay - the part of the page that doesn't change
     def drawOverlay(self):
 
@@ -667,7 +580,7 @@ class PowerScoreScreen:
         bigHeadLine2 = "|  _ \ _____      _____ _ __/ ___|  ___ ___  _ __ ___"
         bigHeadLine3 = "| |_) / _ \ \ /\ / / _ \ '__\___ \ / __/ _ \| '__/ _ \ "
         bigHeadLine4 = "|  __/ (_) \ V  V /  __/ |   ___) | (_| (_) | | |  __/  "
-        bigHeadLine5 = "|_|   \___/ \_/\_/ \___|_|  |____/ \___\___/|_|  \___| v4.0 "
+        bigHeadLine5 = "|_|   \___/ \_/\_/ \___|_|  |____/ \___\___/|_|  \___| v5 "
 
         descrLine1 = "Developed by The Astromechs - FTC Team 3409   http://www.kcastromechs.org"
         descrLine2 = ""
@@ -702,8 +615,8 @@ class PowerScoreScreen:
         screen.addstr(12,self.leftStateStartColumn,"State")
         screen.addstr(12,self.leftPowerScoreStartColumn,"PowerScore")
         screen.addstr(12,self.rightStartColumn,"TEAM")
-        screen.addstr(12,self.rightQPStartColumn,"QP")
-        screen.addstr(12,self.rightRPSstartColumn,"RP")
+        screen.addstr(12,self.rightQPStartColumn,"RP")
+        screen.addstr(12,self.rightRPSstartColumn,"TBP")
         screen.addstr(12,self.rightHighestStartCoulumn,"Highest")
         screen.addstr(12,self.rightMatchesStartColumn,"Matches")
 
@@ -727,7 +640,7 @@ class PowerScoreScreen:
             statusbarstr += " 'd' to change divisions |"
         if (self.showMultiPage):
             statusbarstr += " 'p' to change pages |"
-        statusbarstr +=" (c) 2018 Astromechs Team 3409 "
+        statusbarstr +=" (c) 2023 Astromechs Team 3409 "
         if (statusMsg!=""):
             statusbarstr += "| " + str(statusMsg)
 
@@ -821,8 +734,8 @@ class PowerScoreScreen:
                 if (i<14+self.dataRows):
                     screen.addstr(i,self.rightStartColumn,"{:>5}".format(teamNum))
                     screen.addstr(i,self.rightTeamNameColumn,team["name"][0:self.teamNameWidth])
-                    screen.addstr(i,self.rightQPStartColumn,"{:>2}".format(str(team["qp"])))
-                    screen.addstr(i,self.rightRPSstartColumn,"{:>4}".format(str(team["rp"])))
+                    screen.addstr(i,self.rightQPStartColumn,"{:>2}".format(str(team["rp"])))
+                    screen.addstr(i,self.rightRPSstartColumn,"{:>4}".format(str(team["tbp"])))
                     screen.addstr(i,self.rightHighestStartCoulumn,"{:>7}".format(str(team["highest"])))
                     screen.addstr(i,self.rightMatchesStartColumn,"{:>7}".format(str(team["matches"])))
 
@@ -831,8 +744,8 @@ class PowerScoreScreen:
 
         p = re.compile('^\s?$')
         #if event["subtitle"] != "":
-        if not p.match(event["subtitle"]):
-            screen.addstr(9,self.centerSepColumn-4-int(len(event['subtitle'])/2),">>> {} <<<".format(event['subtitle']))
+        # if not p.match(event["subtitle"]):
+        #     screen.addstr(9,self.centerSepColumn-4-int(len(event['subtitle'])/2),">>> {} <<<".format(event['subtitle']))
 
         # redraw the center separator
         for i in range(12,self.dataRows+14):
@@ -840,10 +753,18 @@ class PowerScoreScreen:
 
 
 
+        
+
+
+
 #
 # UI Main  ... This is where the main loop actually is
 #
 def ui_main(screen, externalScoring):
+
+    event = []
+    teams = []
+    matches = []
 
     # Start up the display, and set for dual div if applicable
     psScreen = PowerScoreScreen(screen)
@@ -857,28 +778,44 @@ def ui_main(screen, externalScoring):
 
     updateTimer=0
 
+    okToHandle_key_p = True
+
     # Main run loop
     while 1:
         # Non-blocking (becuase of nodelay)
-        event = screen.getch()
+        keyevent = screen.getch()
 
         # it's 0.1 seconds later
         updateTimer+=0.1
 
         # known keyboard input
-        if event == ord("q"):
+        if keyevent == ord("q"):
             # quit and break out of the main loop
             break
 
-        if (event == ord("d") and externalScoring.numDivisions==2):
+        if (keyevent == ord("d") and externalScoring.numDivisions==2):
             # change divisions
             externalScoring.changeDivisions()
             updateRequested=True;
 
-        if (event == ord("p") and psScreen.isMultiPage()):
+        if (keyevent == ord("p") and psScreen.isMultiPage() and okToHandle_key_p):
             # show next page of data
             psScreen.changePage()
-            updateRequested=True
+            psScreen.updateData(event,teams)
+            psScreen.updateStatusBar("")
+            psScreen.refresh()
+            okToHandle_key_p = False
+
+        if (not okToHandle_key_p) and keyevent != ord("p"):
+            okToHandle_key_p = True
+
+        if (keyevent == ord("w")):
+            psScreen.showDemoWin(True)
+            psScreen.refresh()
+
+        if (keyevent == ord("e")):
+            psScreen.showDemoWin(False)
+            psScreen.refresh()
 
         # Has the timer run out?  If so, do an update of the data
         if updateTimer>15:
@@ -913,6 +850,10 @@ def ui_main(screen, externalScoring):
             # Tell the screen it is now ok to refresh
             psScreen.refresh()
 
+            
+        
+       
+
         # Wait for 0.1 seconds before the next time through the loop
         time.sleep(.1)
 
@@ -923,26 +864,20 @@ def main():
         description='PowerScore Display.  Displays PowerScores based upon event data.',
         epilog='Note: Additional python3 libraries are required.'
         )
-    parser.add_argument('-k','--key', default='', help='API key - currently supported for theorangealliance.org urls only')
-    parser.add_argument('url1', help='URL for retrieving scoring information.')
-    parser.add_argument('url2', nargs="?", default='', help='optional URL for retrieving scoring information for a second division.  Used for dual division events only.')
+    parser.add_argument('season', help='Event season, for example 2022.  Events in Jan-Apr will be the previous year')
+    parser.add_argument('event', help='Event identifier, for example USMOKSCMP')
+    parser.add_argument('event2', nargs="?", default='', help='optional second event identifier for a multi-division event')
+    parser.add_argument('event3', nargs="?", default='', help='optional third event identifier for a multi-division event')
+    parser.add_argument('event4', nargs="?", default='', help='optional fourth event identifier for a multi-division event')
 
     args = parser.parse_args()
 
-    externalScoring = ExternalScoring(args.url1, args.url2, args.key)
+    externalScoring = ExternalScoring(args.season, args.event, args.event2, args.event2, args.event4, 'bW9mdGNzY29yZXM6RDdERjdBMDQtNTc3MS00MEU2LTg2RjUtODY2NTQ1NzQ2QUYz')
 
-    #   Check to see if we can get data from the external system.  Any failure on this initial connection
-    #   and we'll give the user an error.
-    #try:
-    event, teams, matches = externalScoring.getEventTeamsMatches()
-    #print(teams)
-    #print(matches)
-    #except:
-    #    print("ERROR: Initial contact of the scoring system failed.")
-    #    print()
-    #    exit()
+    # for testing only ... remove this later
+    #event, teams, matches = externalScoring.getEventTeamsMatches()
 
-     # Connection looks ok.  Let's start up the UI
+    # Connection looks ok.  Let's start up the UI
     curses.wrapper(ui_main, externalScoring)
 
 # Kick everything off in a nice way
