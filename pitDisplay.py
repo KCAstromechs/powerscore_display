@@ -30,11 +30,11 @@ Sample Usages:
 
 (1) Single divsion
 
-    ./powerscore_display.py 2022 USMOKSCMP
-
+     python3 pitDisplay.py 2022 USMOKSCMP 
+     
 (2) Multiple divisions.  Up to 4 divisions are supported.
 
-    ./powerscore_display.py 2021 FTCCMP1FRNK FTCCMP1JEMI
+    python3 pitDisplay.py 2022 USMOKSCMP USMOKSSTLNLT USMOKSKCWLT USMOKSKCELT
 
 ----------
 
