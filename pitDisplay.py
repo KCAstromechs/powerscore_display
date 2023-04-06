@@ -7,12 +7,9 @@ This is primarily intended to run on a Raspberry Pi connected to an HDMI Screen.
 python with ncurses is supported.  Python3 is required.  Note that this is a command line utility... you will need to run it from the
 command line.
 
-For current raspbian installations, you'll need to install a few libraries.  Use the pip3 tool (you may have to install pip3).
-These commands should get the required libraries installed on a current raspberry pi using raspbian:
+For current Raspberry Pi OS installations, you'll need to install libraries (right now only curses).  Use the pip or pip3 tool as appropriate.
 
-    sudo apt-get install python3-pip
-    pip3 install requests
-    TODO this is probably not needed anymore ==> pip3 install requirements.txt
+    pip3 install -r requirements.txt
 
 If you're on another operating system (Windows, OSX, Ubuntu, etc), you're a little on your own.  If you can get python3 installed,
 along with the required python libraries, you should be able to get this working.
@@ -77,7 +74,7 @@ from PSTeamSchedulePanel import PSTeamSchedulePanel
 minstdscrHeight = 30
 minstdscrWidth = 132
 
-timeBetweenAutoUpdates = 300   # in seconds
+secBetweenAutoUpdates = 300   # in seconds
 
 class stdscrSizeException(Exception):
 
@@ -182,20 +179,12 @@ def ui_main(stdscr: curses.window, scoringSystems: list[ExternalScoring]):
     # Set updateRequested to true to force an immediate update
     updateRequested = True
 
-    updateTimer=0
-
-    okToHandle_key_p = True
+    nextUpdateTimeSec = int(time.time()) + secBetweenAutoUpdates
 
     # Main run loop
     while 1:
         # Non-blocking (becuase of nodelay)
         keyevent = stdscr.getch()
-
-        # if keyevent != -1:
-        #     statusBar.redraw(f'Key: {keyevent}                   ')
-        #     curses.panel.update_panels()
-        #     curses.doupdate()
-        #     time.sleep(1)
 
         # q to quit
         if keyevent == ord("q"):
@@ -204,7 +193,7 @@ def ui_main(stdscr: curses.window, scoringSystems: list[ExternalScoring]):
 
         # r to force a data refresh
         if keyevent == ord("r"):
-            updateTimer = timeBetweenAutoUpdates
+            updateRequested = True
 
         # esc key to pop back and select a different event
         if keyevent == 27:
@@ -235,6 +224,7 @@ def ui_main(stdscr: curses.window, scoringSystems: list[ExternalScoring]):
                 psSelectEventPanel.setVisible(False)
                 scoringSystemIndex = psSelectEventPanel.getSelectedIndex()
                 eventNamePanel.redraw(scoringSystems[scoringSystemIndex])
+                psScoresPanel.clear()
                 psScoresPanel.setVisible(True)
                 updateRequested = True
             elif ( (not psLoadingPanel.isVisible()) and (not psTeamSchedulePanel.isVisible()) ):
@@ -248,7 +238,21 @@ def ui_main(stdscr: curses.window, scoringSystems: list[ExternalScoring]):
 
             curses.panel.update_panels()
             curses.doupdate()
-            
+
+        # super secret way to see a team display with prediction turned on
+        if keyevent == ord('p'):
+
+            if ( (not psLoadingPanel.isVisible()) and (not psTeamSchedulePanel.isVisible()) ):
+                # OK to show the team schedule
+                if (psScoresPanel.getHighlightTeamNum() != 0):
+                    # but only if a team is really selected
+                    psTeamSchedulePanel.show(psScoresPanel.getHighlightTeamNum(),scoringSystems[scoringSystemIndex], True)
+                    pass
+
+                pass
+
+            curses.panel.update_panels()
+            curses.doupdate()
 
         # down arrow
         if keyevent == 258:
@@ -288,20 +292,15 @@ def ui_main(stdscr: curses.window, scoringSystems: list[ExternalScoring]):
             curses.panel.update_panels()
             curses.doupdate()
 
-        # it's 0.1 seconds later
-        if psScoresPanel.isVisible():
-            updateTimer+=0.1
-
         # Has the timer run out?  If so, do an update of the data
-        if updateTimer>timeBetweenAutoUpdates:
-            updateTimer=0
+        if int(time.time() >= nextUpdateTimeSec):
             updateRequested=True
 
          # Do we need to do an update?  Only update if the psScoresPanel is visible.  Might not be if we're
          #   selecting a different event
         if updateRequested and psScoresPanel.isVisible():
 
-            updateRequested = False
+
 
             # Tell the user we're updating
             psLoadingPanel.setVisible(True)
@@ -328,6 +327,9 @@ def ui_main(stdscr: curses.window, scoringSystems: list[ExternalScoring]):
                 statusBar.redraw("ConnectionError at "+datetime.now().strftime("%m/%d/%Y, %H:%M:%S"))
 
             psLoadingPanel.setVisible(False)
+
+            updateRequested = False
+            nextUpdateTimeSec= time.time() + secBetweenAutoUpdates
 
             # Tell the screen it is now ok to refresh
             curses.panel.update_panels()

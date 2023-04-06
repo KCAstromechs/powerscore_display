@@ -20,7 +20,7 @@ class PSTeamSchedulePanel:
         return self.visible
 
 
-    def show(self, teamNumber: int, scoringSystem: ExternalScoring):
+    def show(self, teamNumber: int, scoringSystem: ExternalScoring, showPrediction = False):
 
         teams = scoringSystem.getTeams()
         matches = scoringSystem.getMatches()
@@ -98,26 +98,72 @@ class PSTeamSchedulePanel:
             match = matches[matchid]
             redAlliance = match['alliances']['red']
             blueAlliance = match['alliances']['blue']
+
             if (redAlliance['team1'] == teamNumber or redAlliance['team2'] == teamNumber or blueAlliance['team1'] == teamNumber or blueAlliance['team2'] == teamNumber ):
+
+                teamOnRedAlliance = False
+
                 self.window.addstr(MATCHLIST_START_ROW+3*matchRow,MATCH_x,"{:>2d}".format(matchid))
+
+                
                 psDisp = "{:.1f}".format(teams[redAlliance['team1']]['powerScore'])
+                if redAlliance['team1'] == teamNumber:
+                    teamOnRedAlliance = True
+                    self.window.attron(curses.color_pair(2))
                 self.window.addstr(MATCHLIST_START_ROW+3*matchRow,REDALLIANCE_x,f"{redAlliance['team1']} {teams[redAlliance['team1']]['name']} ({psDisp})"[:REDALLIANCE_width])
+                self.window.attroff(curses.color_pair(2))
+                
                 psDisp = "{:.1f}".format(teams[blueAlliance['team1']]['powerScore'])
+                if blueAlliance['team1'] == teamNumber:
+                    self.window.attron(curses.color_pair(2))
                 self.window.addstr(MATCHLIST_START_ROW+3*matchRow,BLUEALLIANCE_x,f"{blueAlliance['team1']} {teams[blueAlliance['team1']]['name']} ({psDisp})"[:BLUEALLIANCE_width])
+                self.window.attroff(curses.color_pair(2))
 
                 psDisp = "{:.1f}".format(teams[redAlliance['team2']]['powerScore'])
+                if redAlliance['team2'] == teamNumber:
+                    teamOnRedAlliance = True
+                    self.window.attron(curses.color_pair(2))
                 self.window.addstr(MATCHLIST_START_ROW+3*matchRow+1,REDALLIANCE_x,f"{redAlliance['team2']} {teams[redAlliance['team2']]['name']} ({psDisp})"[:REDALLIANCE_width])
+                self.window.attroff(curses.color_pair(2))
+
                 psDisp = "{:.1f}".format(teams[blueAlliance['team2']]['powerScore'])
+                if blueAlliance['team2'] == teamNumber:
+                    self.window.attron(curses.color_pair(2))
                 self.window.addstr(MATCHLIST_START_ROW+3*matchRow+1,BLUEALLIANCE_x,f"{blueAlliance['team2']} {teams[blueAlliance['team2']]['name']} ({psDisp})"[:BLUEALLIANCE_width])
+                self.window.attroff(curses.color_pair(2))
 
                 if match['played']:
                     redScore = match["alliances"]["red"]["total"]
                     blueScore = match["alliances"]["blue"]["total"]
-                    self.window.addstr(MATCHLIST_START_ROW+3*matchRow,SCORE_x,"{:d} - {:d}".format(redScore,blueScore))
+
+                    result = "Tie"
+                    if (teamOnRedAlliance and redScore > blueScore):
+                        result = "Win"
+                    elif (teamOnRedAlliance and redScore < blueScore):
+                        result = "Loss"
+                    if ((not teamOnRedAlliance) and redScore > blueScore):
+                        result = "Loss"
+                    if ((not teamOnRedAlliance) and redScore < blueScore):
+                        result = "Win"
+
+                    self.window.addstr(MATCHLIST_START_ROW+3*matchRow,SCORE_x,"{:d} - {:d} ({})".format(redScore,blueScore, result))
                 else:
-                    # redScore = int(teams[redAlliance['team1']]['powerScore'] + teams[redAlliance['team2']]['powerScore'] + .5)
-                    # blueScore = int(teams[blueAlliance['team1']]['powerScore'] + teams[blueAlliance['team2']]['powerScore'] + .5)
-                    # self.window.addstr(MATCHLIST_START_ROW+3*matchRow,SCORE_x,"{:d} - {:d} (predicted)".format(redScore,blueScore))
+                    if showPrediction:
+                        redScore = int(teams[redAlliance['team1']]['powerScore'] + teams[redAlliance['team2']]['powerScore'] + .5)
+                        blueScore = int(teams[blueAlliance['team1']]['powerScore'] + teams[blueAlliance['team2']]['powerScore'] + .5)
+
+                        result = "Tie"
+                        if (teamOnRedAlliance and redScore > blueScore):
+                            result = "Win"
+                        elif (teamOnRedAlliance and redScore < blueScore):
+                            result = "Loss"
+                        if ((not teamOnRedAlliance) and redScore > blueScore):
+                            result = "Loss"
+                        if ((not teamOnRedAlliance) and redScore < blueScore):
+                            result = "Win"
+
+                        self.window.addstr(MATCHLIST_START_ROW+3*matchRow,SCORE_x,"{:d} - {:d}".format(redScore,blueScore))
+                        self.window.addstr(MATCHLIST_START_ROW+3*matchRow+1,SCORE_x,"(predicted {})".format(result))
                     pass
 
                 matchRow = matchRow + 1

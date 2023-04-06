@@ -104,55 +104,22 @@ class ExternalScoring:
     # Get data from theorangealliance <== USING THIS AS A TEMPLATE FOR CHANGING TO FTC-EVENTS
     def updateTeamsMatchesFromFTC(self):
 
-        # event = {}
-        # teams = {}
-        # matches = {}
-
-        # print("attempting request ...")
-
-        # why, oh why, does toa make getting the event details so hard.  5 requests are necessary to get the data we need :(
-        #r=requests.get(self.requestURI+self.season+'/events?eventCode='+self.eventCode, headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=5)
-        #eventJsonResult = r.json()
-
-        # r=requests.get(self.requestURI+self.season+'/matches/'+self.eventCode, headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=5)
-        # matchesJsonResult = r.json()
-
         r=requests.get(self.requestURI+self.season+'/schedule/'+self.eventCode+"/qual/hybrid", headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=5)
         matchesJsonResult = r.json()
 
         r=requests.get(self.requestURI+self.season+'/scores/'+self.eventCode+"/qual", headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=5)
         scoresJsonResult = r.json()
 
-        # there could be 2 pages of teams.  There's a better way to do this, but whatever
-        r=requests.get(self.requestURI+self.season+'/teams?eventCode='+self.eventCode, headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=5)
-        teamsJsonResult = r.json()
-        r=requests.get(self.requestURI+self.season+'/teams?page=2&eventCode='+self.eventCode, headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=5)
-        teamsJsonResult2 = r.json()
-
         r=requests.get(self.requestURI+self.season+'/rankings/'+self.eventCode, headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=5)
         rankingsJsonResult = r.json()
 
-        # print(eventJsonResult)
-        # print("\n======================\n")
-        # print(matchesJsonResult)
-        # print("\n======================\n")
-        # print(teamsJsonResult)
-        # print("\n======================\n")
-        # print(rankingsJsonResult)
-        # print("\n======================\n")
+        r=requests.get(self.requestURI+self.season+'/teams?eventCode='+self.eventCode, headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=5)
+        teamsJsonResult = r.json()
 
-        # print(scoresJsonResult)
-        # print("\n======================\n")
-        
-
-
-        # Just a couple of event things
-        
-        #event['subtitle'] = ""
-        #if "division_name" in eventJsonResult:
-        #    event['subtitle'] = eventJsonResult[0]['division_name']
-
-        # print("Event Name: "+ event['title'])
+        # there could be 2 pages of teams.  There's a better way to do this, but whatever
+        if teamsJsonResult['pageTotal'] > 1:
+            r=requests.get(self.requestURI+self.season+'/teams?page=2&eventCode='+self.eventCode, headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=5)
+            teamsJsonResult2 = r.json()
 
         # Assemble all the team info from the teams request
         for team in teamsJsonResult['teams']:
@@ -186,39 +153,38 @@ class ExternalScoring:
             if self.teams[teamNum]['name'] == None:
                 self.teams[teamNum]['name'] = ""
 
-        # there might be a second page of teams
-        for team in teamsJsonResult2['teams']:
-            teamNum = team["teamNumber"]
-            self.teams[teamNum] = {}
-            self.teams[teamNum]['number'] = teamNum
-            self.teams[teamNum]['name'] = team["nameShort"]
-            self.teams[teamNum]['school'] = ''
-            self.teams[teamNum]['city'] = team["city"]
-            self.teams[teamNum]['state'] = team["stateProv"]
-            self.teams[teamNum]['country'] = team["country"]
-            self.teams[teamNum]['rank'] = 1000    # this forces any non-competing teams to the bottom
-            self.teams[teamNum]['rp'] = 0
-            self.teams[teamNum]['tbp'] = 0
-            self.teams[teamNum]['highest'] = 0
-            self.teams[teamNum]['matches'] = 0
-            self.teams[teamNum]['real_matches'] = 0
-            self.teams[teamNum]['allianceScore'] = 0
-            self.teams[teamNum]['autoAllianceScore'] = 0
-            self.teams[teamNum]['teleAllianceScore'] = 0
-            self.teams[teamNum]['endgAllianceScore'] = 0
-            self.teams[teamNum]['powerScore'] = 0
-            self.teams[teamNum]['autoPowerScore'] = 0
-            self.teams[teamNum]['telePowerScore'] = 0
-            self.teams[teamNum]['endgPowerScore'] = 0
-            self.teams[teamNum]['overallX'] = 0
-            self.teams[teamNum]['autoX'] = 0
-            self.teams[teamNum]['teleX'] = 0
-            self.teams[teamNum]['endgX'] = 0
+        # and if there is a second page of teams ...
+        if teamsJsonResult['pageTotal'] > 1:
+            for team in teamsJsonResult2['teams']:
+                teamNum = team["teamNumber"]
+                self.teams[teamNum] = {}
+                self.teams[teamNum]['number'] = teamNum
+                self.teams[teamNum]['name'] = team["nameShort"]
+                self.teams[teamNum]['school'] = ''
+                self.teams[teamNum]['city'] = team["city"]
+                self.teams[teamNum]['state'] = team["stateProv"]
+                self.teams[teamNum]['country'] = team["country"]
+                self.teams[teamNum]['rank'] = 1000    # this forces any non-competing teams to the bottom
+                self.teams[teamNum]['rp'] = 0
+                self.teams[teamNum]['tbp'] = 0
+                self.teams[teamNum]['highest'] = 0
+                self.teams[teamNum]['matches'] = 0
+                self.teams[teamNum]['real_matches'] = 0
+                self.teams[teamNum]['allianceScore'] = 0
+                self.teams[teamNum]['autoAllianceScore'] = 0
+                self.teams[teamNum]['teleAllianceScore'] = 0
+                self.teams[teamNum]['endgAllianceScore'] = 0
+                self.teams[teamNum]['powerScore'] = 0
+                self.teams[teamNum]['autoPowerScore'] = 0
+                self.teams[teamNum]['telePowerScore'] = 0
+                self.teams[teamNum]['endgPowerScore'] = 0
+                self.teams[teamNum]['overallX'] = 0
+                self.teams[teamNum]['autoX'] = 0
+                self.teams[teamNum]['teleX'] = 0
+                self.teams[teamNum]['endgX'] = 0
 
-            if self.teams[teamNum]['name'] == None:
-                self.teams[teamNum]['name'] = ""
-
-
+                if self.teams[teamNum]['name'] == None:
+                    self.teams[teamNum]['name'] = ""
 
         # Add in the ranking information
         # ... note that it is possible that a team could show up in rankings, but not in the 
@@ -231,18 +197,6 @@ class ExternalScoring:
                 self.teams[teamNum]['tbp'] = ranking["sortOrder2"]
                 self.teams[teamNum]['highest'] = ranking["sortOrder4"]
                 self.teams[teamNum]['matches'] = ranking["matchesPlayed"]
-                # teams[teamNum]['allianceScore'] = 0
-                # teams[teamNum]['autoAllianceScore'] = 0
-                # teams[teamNum]['teleAllianceScore'] = 0
-                # teams[teamNum]['endgAllianceScore'] = 0
-                # teams[teamNum]['powerScore'] = 100
-                # teams[teamNum]['autoPowerScore'] = 100
-                # teams[teamNum]['telePowerScore'] = 100
-                # teams[teamNum]['endgPowerScore'] = 100
-
-
-
-
 
         # Now build up the qualifier matches
         #for match in matchesJsonResult['matches']:
@@ -252,6 +206,8 @@ class ExternalScoring:
             #  for only played matches?
             if (match["tournamentLevel"]=="QUALIFICATION"):
 
+                matchNumber = match['matchNumber']
+
                 # we have the match, we need to get the scoring object as well
                 # If the scoring object isn't found, that means the match hasn't been played
                 #
@@ -260,7 +216,7 @@ class ExternalScoring:
                 #   we break out of the loop
                 scoreFound = False
                 for score in scoresJsonResult['MatchScores']:
-                    if score['matchNumber'] == match['matchNumber']:
+                    if score['matchNumber'] == matchNumber:
                         # matchScore = score;
                         scoreFound = True
                         break;
@@ -280,35 +236,26 @@ class ExternalScoring:
                     elif j['station'] == "Blue2":
                         blue2 = j['teamNumber']
 
-                # # now find the red scores vs the blue scores
-                # redScore = [];
-                # blueScore = [];
-                # for j in score['alliances']:
-                #     if j['alliance'] == "Red":
-                #         redScore = j;
-                #     elif j['alliance'] == "Blue":
-                #         blueScore = j;
-
                 # Set up the match and the teams in the match.  Do this whether or not the match as been played.  
                 #   For now, assume it has not been played.
-                self.matches[match["matchNumber"]] = {}
-                self.matches[match["matchNumber"]]['matchid'] = match["matchNumber"]
-                self.matches[match["matchNumber"]]['played'] = False
+                self.matches[matchNumber] = {}
+                self.matches[matchNumber]['matchid'] = matchNumber
+                self.matches[matchNumber]['played'] = False
                 
-                self.matches[match["matchNumber"]]['alliances'] = {}
-                self.matches[match["matchNumber"]]['alliances']['red'] = {}
-                self.matches[match['matchNumber']]['alliances']['red']['team1'] = red1
-                self.matches[match['matchNumber']]['alliances']['red']['team2'] = red2
-                self.matches[match["matchNumber"]]['alliances']['blue'] = {}
-                self.matches[match['matchNumber']]['alliances']['blue']['team1'] = blue1
-                self.matches[match['matchNumber']]['alliances']['blue']['team2'] = blue2
+                self.matches[matchNumber]['alliances'] = {}
+                self.matches[matchNumber]['alliances']['red'] = {}
+                self.matches[matchNumber]['alliances']['red']['team1'] = red1
+                self.matches[matchNumber]['alliances']['red']['team2'] = red2
+                self.matches[matchNumber]['alliances']['blue'] = {}
+                self.matches[matchNumber]['alliances']['blue']['team1'] = blue1
+                self.matches[matchNumber]['alliances']['blue']['team2'] = blue2
 
 
                 if (scoreFound):
-                #if (scoreFound) and match["matchNumber"]<20:
+                #if (scoreFound) and matchNumber<18:  # Cute simple hack to simulate an event in progress
                     
                     # Looks like the match has been played (becuase we have a score for it)
-                    self.matches[match["matchNumber"]]['played'] = True
+                    self.matches[matchNumber]['played'] = True
 
                     # now find the red scores vs the blue scores
                     redScore = [];
@@ -320,16 +267,16 @@ class ExternalScoring:
                             blueScore = j;
 
                     # Assign the points to each team
-                    self.matches[match["matchNumber"]]['alliances']['red']['total'] = redScore['totalPoints']
-                    self.matches[match["matchNumber"]]['alliances']['red']['auto'] = redScore['autoPoints']
-                    self.matches[match["matchNumber"]]['alliances']['red']['teleop'] = redScore['dcPoints']
-                    self.matches[match["matchNumber"]]['alliances']['red']['endg'] = redScore['endgamePoints']
-                    self.matches[match["matchNumber"]]['alliances']['red']['pen'] = blueScore['penaltyPointsCommitted']
-                    self.matches[match["matchNumber"]]['alliances']['blue']['total'] = blueScore['totalPoints']
-                    self.matches[match["matchNumber"]]['alliances']['blue']['auto'] = blueScore['autoPoints']
-                    self.matches[match["matchNumber"]]['alliances']['blue']['teleop'] = blueScore['dcPoints']
-                    self.matches[match["matchNumber"]]['alliances']['blue']['endg'] = blueScore['endgamePoints']
-                    self.matches[match["matchNumber"]]['alliances']['blue']['pen'] = redScore['penaltyPointsCommitted']
+                    self.matches[matchNumber]['alliances']['red']['total'] = redScore['totalPoints']
+                    self.matches[matchNumber]['alliances']['red']['auto'] = redScore['autoPoints']
+                    self.matches[matchNumber]['alliances']['red']['teleop'] = redScore['dcPoints']
+                    self.matches[matchNumber]['alliances']['red']['endg'] = redScore['endgamePoints']
+                    self.matches[matchNumber]['alliances']['red']['pen'] = blueScore['penaltyPointsCommitted']
+                    self.matches[matchNumber]['alliances']['blue']['total'] = blueScore['totalPoints']
+                    self.matches[matchNumber]['alliances']['blue']['auto'] = blueScore['autoPoints']
+                    self.matches[matchNumber]['alliances']['blue']['teleop'] = blueScore['dcPoints']
+                    self.matches[matchNumber]['alliances']['blue']['endg'] = blueScore['endgamePoints']
+                    self.matches[matchNumber]['alliances']['blue']['pen'] = redScore['penaltyPointsCommitted']
 
                     # and add to the number of matches we've found
                     self.teams[red1]['real_matches'] += 1

@@ -21,6 +21,8 @@ class PSEventNamePanel(PSPanelInterface):
     
 
     def redraw(self, scoringSystem: ExternalScoring):
-        
+
+        # Make sure any previous event name was cleared out, then write the event name
+        self.window.addstr(1, 0, " " * 96)
         self.window.addstr(1, 0, scoringSystem.event['name'])
 

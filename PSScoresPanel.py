@@ -78,6 +78,9 @@ class PSScoresPanel(PSPanelInterface):
         self.maxTeamRows = self.windowHeight - 2
 
 
+    def clear(self):
+        self.window.clear()
+
     def changeSortColumn(self, delta):
         self.sortColumn = (self.sortColumn + delta) % self.sortColumn_count
 
