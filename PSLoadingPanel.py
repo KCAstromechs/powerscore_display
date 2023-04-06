@@ -16,7 +16,7 @@ class PSLoadingPanel(PSPanelInterface):
         #super().__init__(2, 100, 10, 10)
         top = screenHeight // 2 - 3
         left = screenWidth // 2 - 50
-        width = screenWidth - 100
+        width = 100
         super().__init__(5, width, top, left)
         self.window.box()
 

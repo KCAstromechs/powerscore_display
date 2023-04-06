@@ -22,7 +22,7 @@ class PSSelectEventPanel(PSPanelInterface):
         
         top = screenHeight // 2 - numEvents // 2 - 2
         left = screenWidth // 2 - 50
-        width = screenWidth - 100
+        width = 100
         super().__init__(8, width, top, left)
         #self.window.box()
         #self.window.addstr(0,width // 2 - 8, " Select Event ")
