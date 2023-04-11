@@ -340,6 +340,13 @@ def ui_main(stdscr: curses.window, scoringSystems: list[ExternalScoring]):
 
     pass
 
+# check for an internet connection
+def network_up():
+    try:
+        r=requests.get('https://ftc-events.firstinspires.org/',  timeout=15)
+        return True
+    except: 
+        return False
 
 # Main function ... reads the command line parms and starts up the UI if things look OK
 def main():
@@ -363,6 +370,11 @@ def main():
     except Exception as x:
         print("Error reading expected auth.key file")
         exit()
+
+    # wait for a network connection
+    while(not network_up()):
+        print("Network is unavailable ... will try again in 10 seconds")
+        time.sleep(10)
 
     try:
         # check and set up the scoring system objects.  

@@ -92,7 +92,7 @@ class ExternalScoring:
     # get event info (this won't change over the course of an event)
     def updateEvent(self):
 
-        r=requests.get(self.requestURI+self.season+'/events?eventCode='+self.eventCode, headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=5)
+        r=requests.get(self.requestURI+self.season+'/events?eventCode='+self.eventCode, headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=15)
 
         if r.status_code!=200:
             raise ExternalScoringException(f"Could not find event {self.eventCode}.  Request returned {r.status_code}")
@@ -104,21 +104,21 @@ class ExternalScoring:
     # Get data from theorangealliance <== USING THIS AS A TEMPLATE FOR CHANGING TO FTC-EVENTS
     def updateTeamsMatchesFromFTC(self):
 
-        r=requests.get(self.requestURI+self.season+'/schedule/'+self.eventCode+"/qual/hybrid", headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=5)
+        r=requests.get(self.requestURI+self.season+'/schedule/'+self.eventCode+"/qual/hybrid", headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=15)
         matchesJsonResult = r.json()
 
-        r=requests.get(self.requestURI+self.season+'/scores/'+self.eventCode+"/qual", headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=5)
+        r=requests.get(self.requestURI+self.season+'/scores/'+self.eventCode+"/qual", headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=15)
         scoresJsonResult = r.json()
 
-        r=requests.get(self.requestURI+self.season+'/rankings/'+self.eventCode, headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=5)
+        r=requests.get(self.requestURI+self.season+'/rankings/'+self.eventCode, headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=15)
         rankingsJsonResult = r.json()
 
-        r=requests.get(self.requestURI+self.season+'/teams?eventCode='+self.eventCode, headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=5)
+        r=requests.get(self.requestURI+self.season+'/teams?eventCode='+self.eventCode, headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=15)
         teamsJsonResult = r.json()
 
         # there could be 2 pages of teams.  There's a better way to do this, but whatever
         if teamsJsonResult['pageTotal'] > 1:
-            r=requests.get(self.requestURI+self.season+'/teams?page=2&eventCode='+self.eventCode, headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=5)
+            r=requests.get(self.requestURI+self.season+'/teams?page=2&eventCode='+self.eventCode, headers={'Content-Type': 'application/json', 'X-Application-Origin': 'PowerScore', 'Authorization': 'Basic '+self.auth},  timeout=15)
             teamsJsonResult2 = r.json()
 
         # Assemble all the team info from the teams request
