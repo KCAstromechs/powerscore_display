@@ -22,7 +22,7 @@ class PSSelectEventPanel(PSPanelInterface):
         
         top = screenHeight // 2 - numEvents // 2 - 2
         left = screenWidth // 2 - 50
-        width = 100
+        width = 120
         super().__init__(8, width, top, left)
         #self.window.box()
         #self.window.addstr(0,width // 2 - 8, " Select Event ")
@@ -60,7 +60,7 @@ class PSSelectEventPanel(PSPanelInterface):
 
             if teamIndex == self.selectedIndex:
                 self.window.attron(curses.color_pair(2))
-            self.window.addstr(line, 20, scoringSystem.event['name'])
+            self.window.addstr(line, 10, scoringSystem.event['name'])
             self.window.attroff(curses.color_pair(2))
 
             teamIndex = teamIndex + 1

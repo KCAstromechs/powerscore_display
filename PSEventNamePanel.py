@@ -15,7 +15,7 @@ class PSEventNamePanel(PSPanelInterface):
         screenHeight, screenWidth = baseWindow.getmaxyx()
 
         # This goes on lines 3-5, 96 chars in from the left side
-        super().__init__(3, 96, 3, screenWidth - 96)
+        super().__init__(2, 96, 1, screenWidth - 96)
 
         self.setVisible(True)
     
@@ -23,6 +23,6 @@ class PSEventNamePanel(PSPanelInterface):
     def redraw(self, scoringSystem: ExternalScoring):
 
         # Make sure any previous event name was cleared out, then write the event name
-        self.window.addstr(1, 0, " " * 96)
-        self.window.addstr(1, 0, scoringSystem.event['name'])
+        self.window.addstr(0, 0, " " * 96)
+        self.window.addstr(0, 0, scoringSystem.event['name'])
 

@@ -14,11 +14,11 @@ class PSScoresPanel(PSPanelInterface):
 
         screenHeight, screenWidth = baseWindow.getmaxyx()
 
-        # This starts on line 7, height to leave one row for status at the bottom, full width
-        self.windowHeight = screenHeight - 8
+        # This starts on line 6, height to leave one row for status at the bottom, full width
+        self.windowHeight = screenHeight - 5
         self.windowWidth = screenWidth
         
-        super().__init__(self.windowHeight, self.windowWidth, 7, 0)
+        super().__init__(self.windowHeight, self.windowWidth, 4, 0)
         self.setVisible(True)
 
         # Calculating all the important positions

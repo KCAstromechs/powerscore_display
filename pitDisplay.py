@@ -113,31 +113,27 @@ def drawBaseScreen(stdscr: curses.window):
     rightHeadingStartColumn = screenWidth - 96
     leftStartColumn = 2
 
-    bigHeadLine1 = " ____                        ____"
-    bigHeadLine2 = "|  _ \ _____      _____ _ __/ ___|  ___ ___  _ __ ___"
-    bigHeadLine3 = "| |_) / _ \ \ /\ / / _ \ '__\___ \ / __/ _ \| '__/ _ \ "
-    bigHeadLine4 = "|  __/ (_) \ V  V /  __/ |   ___) | (_| (_) | | |  __/  "
-    bigHeadLine5 = "|_|   \___/ \_/\_/ \___|_|  |____/ \___\___/|_|  \___| v5 "
+    bigHeadLine1 = "  _____   _____  _  _  _ _______  ______ _______ _______  _____   ______ _______"
+    bigHeadLine2 = " |_____] |     | |  |  | |______ |_____/ |______ |       |     | |_____/ |______"
+    bigHeadLine3 = " |       |_____| |__|__| |______ |    \_ ______| |_____  |_____| |    \_ |______ v5"                                    
 
     descrLine1 = "Developed by The Astromechs - FTC Team 3409   http://www.kcastromechs.org"
-    descrLine2 = ""
-    descrLine3 = "PowerScore is a scouting tool that statistically measures the offensive performance of"
-    descrLine4 = "FTC Teams at Tournaments.  PowerScore is based on team scoring.  It differs from the FTC"
-    descrLine5 = "Qualification/Rating points in that it measures teams by their scoring only, not wins/losses."
+    # descrLine2 = ""
+    # descrLine3 = "PowerScore is a scouting tool that statistically measures the offensive performance of"
+    # descrLine4 = "FTC Teams at Tournaments.  PowerScore is based on team scoring.  It differs from the FTC"
+    # descrLine5 = "Qualification/Rating points in that it measures teams by their scoring only, not wins/losses."
 
     stdscr.attron(curses.color_pair(2))
-    stdscr.addstr(1, leftStartColumn, bigHeadLine1.encode("utf-8"))
-    stdscr.addstr(2, leftStartColumn, bigHeadLine2.encode("utf-8"))
-    stdscr.addstr(3, leftStartColumn, bigHeadLine3.encode("utf-8"))
-    stdscr.addstr(4, leftStartColumn, bigHeadLine4.encode("utf-8"))
-    stdscr.addstr(5, leftStartColumn, bigHeadLine5.encode("utf-8"))
+    stdscr.addstr(0, leftStartColumn, bigHeadLine1.encode("utf-8"))
+    stdscr.addstr(1, leftStartColumn, bigHeadLine2.encode("utf-8"))
+    stdscr.addstr(2, leftStartColumn, bigHeadLine3.encode("utf-8"))
     stdscr.attroff(curses.color_pair(2))
 
-    stdscr.addstr(1, rightHeadingStartColumn, descrLine1)
-    stdscr.addstr(2, rightHeadingStartColumn, descrLine2)
-    stdscr.addstr(3, rightHeadingStartColumn, descrLine3)
-    stdscr.addstr(4, rightHeadingStartColumn, descrLine4)
-    stdscr.addstr(5, rightHeadingStartColumn, descrLine5)
+    stdscr.addstr(0, rightHeadingStartColumn, descrLine1)
+    # stdscr.addstr(1, rightHeadingStartColumn, descrLine2)
+    # stdscr.addstr(2, rightHeadingStartColumn, descrLine3)
+    # stdscr.addstr(3, rightHeadingStartColumn, descrLine4)
+    # stdscr.addstr(4, rightHeadingStartColumn, descrLine5)
 
     pass
 
@@ -159,6 +155,8 @@ def ui_main(stdscr: curses.window, scoringSystems: list[ExternalScoring]):
     eventNamePanel = PSEventNamePanel(stdscr)
     eventNamePanel.redraw(scoringSystems[scoringSystemIndex])
 
+    statusBar = PSStatusBarPanel(stdscr)
+
     psScoresPanel = PSScoresPanel(stdscr)
     # psScoresPanel.redraw(scoringSystems[scoringSystemIndex])
 
@@ -169,9 +167,6 @@ def ui_main(stdscr: curses.window, scoringSystems: list[ExternalScoring]):
     psSelectEventPanel.setVisible(False)
 
     psTeamSchedulePanel = PSTeamSchedulePanel(stdscr)
-
-    statusBar = PSStatusBarPanel(stdscr)
-    #statusBar.redraw("Status Bar!")
 
     curses.panel.update_panels()
     curses.doupdate()
